@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_StationBuchung"
+                  targetNamespace="http://novaforge.de/logistik"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.28.0">
+  <!--
+    Zweites Demo-Prozessmodell: Station-Buchung mit Message Events
+    Zeigt „Buchung nötig“ vs. „Buchung möglich“ an Kapazitäts-Stationen.
+  -->
+  <bpmn:message id="Msg_BuchungMoeglich" name="BuchungMoeglich" />
+  <bpmn:message id="Msg_KapazitaetFrei" name="KapazitaetFrei" />
+
+  <bpmn:process id="StationBuchung" name="Station-Buchung (Kapazität)" isExecutable="true"
+                camunda:versionTag="1.0.0" camunda:historyTimeToLive="30">
+
+    <bpmn:startEvent id="Start_Anfrage" name="Buchungsanfrage">
+      <bpmn:outgoing>Flow_to_Pruefung</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Task_KapazitaetPruefen" name="Kapazität prüfen / Buchung nötig"
+                   camunda:assignee="demo" camunda:candidateGroups="dispo">
+      <bpmn:incoming>Flow_to_Pruefung</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_BuchungGw</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gw_Buchung" name="Buchung möglich?" default="Flow_buchung_noetig">
+      <bpmn:incoming>Flow_to_BuchungGw</bpmn:incoming>
+      <bpmn:outgoing>Flow_buchung_moeglich</bpmn:outgoing>
+      <bpmn:outgoing>Flow_buchung_noetig</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_SofortBuchen" name="Sofort buchen (Slot frei)"
+                   camunda:assignee="demo" camunda:candidateGroups="dispo">
+      <bpmn:incoming>Flow_buchung_moeglich</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_Bestaetigt</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:intermediateCatchEvent id="Catch_KapazitaetFrei" name="Warten: Kapazität frei">
+      <bpmn:incoming>Flow_buchung_noetig</bpmn:incoming>
+      <bpmn:outgoing>Flow_nach_Warte</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Msg_KapazitaetFrei" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:userTask id="Task_Nachbuchen" name="Nachträglich buchen"
+                   camunda:assignee="demo" camunda:candidateGroups="dispo">
+      <bpmn:incoming>Flow_nach_Warte</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_Bestaetigt2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End_Bestaetigt" name="Buchung bestätigt">
+      <bpmn:incoming>Flow_to_Bestaetigt</bpmn:incoming>
+      <bpmn:incoming>Flow_to_Bestaetigt2</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_to_Pruefung" sourceRef="Start_Anfrage" targetRef="Task_KapazitaetPruefen" />
+    <bpmn:sequenceFlow id="Flow_to_BuchungGw" sourceRef="Task_KapazitaetPruefen" targetRef="Gw_Buchung" />
+    <bpmn:sequenceFlow id="Flow_buchung_moeglich" name="Buchung möglich" sourceRef="Gw_Buchung" targetRef="Task_SofortBuchen">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${buchungMoeglich == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_buchung_noetig" name="Buchung nötig (warten)" sourceRef="Gw_Buchung" targetRef="Catch_KapazitaetFrei" />
+    <bpmn:sequenceFlow id="Flow_nach_Warte" sourceRef="Catch_KapazitaetFrei" targetRef="Task_Nachbuchen" />
+    <bpmn:sequenceFlow id="Flow_to_Bestaetigt" sourceRef="Task_SofortBuchen" targetRef="End_Bestaetigt" />
+    <bpmn:sequenceFlow id="Flow_to_Bestaetigt2" sourceRef="Task_Nachbuchen" targetRef="End_Bestaetigt" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_StationBuchung">
+    <bpmndi:BPMNPlane id="BPMNPlane_StationBuchung" bpmnElement="StationBuchung">
+      <bpmndi:BPMNShape id="S_Start" bpmnElement="Start_Anfrage">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="130" y="145" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Pruefen" bpmnElement="Task_KapazitaetPruefen">
+        <dc:Bounds x="240" y="80" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Gw" bpmnElement="Gw_Buchung" isMarkerVisible="true">
+        <dc:Bounds x="455" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="435" y="65" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Sofort" bpmnElement="Task_SofortBuchen">
+        <dc:Bounds x="560" y="80" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Catch" bpmnElement="Catch_KapazitaetFrei">
+        <dc:Bounds x="482" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="458" y="265" width="85" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Nach" bpmnElement="Task_Nachbuchen">
+        <dc:Bounds x="560" y="200" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_End" bpmnElement="End_Bestaetigt">
+        <dc:Bounds x="772" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="747" y="145" width="87" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="E1" bpmnElement="Flow_to_Pruefung">
+        <di:waypoint x="188" y="120" />
+        <di:waypoint x="240" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E2" bpmnElement="Flow_to_BuchungGw">
+        <di:waypoint x="400" y="120" />
+        <di:waypoint x="455" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E3" bpmnElement="Flow_buchung_moeglich">
+        <di:waypoint x="505" y="120" />
+        <di:waypoint x="560" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="505" y="102" width="90" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E4" bpmnElement="Flow_buchung_noetig">
+        <di:waypoint x="480" y="145" />
+        <di:waypoint x="480" y="222" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="488" y="170" width="120" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E5" bpmnElement="Flow_nach_Warte">
+        <di:waypoint x="518" y="240" />
+        <di:waypoint x="560" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E6" bpmnElement="Flow_to_Bestaetigt">
+        <di:waypoint x="710" y="120" />
+        <di:waypoint x="772" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E7" bpmnElement="Flow_to_Bestaetigt2">
+        <di:waypoint x="710" y="240" />
+        <di:waypoint x="790" y="240" />
+        <di:waypoint x="790" y="138" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

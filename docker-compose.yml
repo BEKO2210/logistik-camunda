@@ -1,0 +1,24 @@
+# Camunda Platform 7 Community – Logistik-Demo (lokal, keine Cloud nötig)
+# Image: Camunda Platform Run (Cockpit + Tasklist + Admin + Welcome + REST)
+services:
+  camunda:
+    image: camunda/camunda-bpm-platform:run-7.22.0
+    container_name: logistik-camunda
+    ports:
+      - "8080:8080"
+    volumes:
+      # BPMN unter configuration/resources = Auto-Deploy beim Start
+      - ./processes:/camunda/configuration/resources:ro
+      - ./config/default.yml:/camunda/configuration/default.yml:ro
+      - camunda-data:/camunda/camunda-db
+    # Image hat kein curl; TCP-Check reicht für Demo
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && echo -e \"GET /engine-rest/engine HTTP/1.0\\r\\n\\r\\n\" >&3 && cat <&3 | head -1 | grep -q 200'"]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+      start_period: 90s
+    restart: unless-stopped
+
+volumes:
+  camunda-data:

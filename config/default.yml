@@ -1,0 +1,24 @@
+# Camunda Platform Run – Demo-Konfiguration (Community)
+camunda.bpm:
+  admin-user:
+    id: demo
+    password: demo
+    firstName: Demo
+    lastName: Admin
+  filter:
+    create: All tasks
+  # Job Executor für Timer/Async
+  job-execution:
+    enabled: true
+  authorization:
+    enabled: true
+
+# REST / Webapps unter Root (Port 8080)
+server:
+  port: 8080
+
+# Logging etwas ruhiger für Demos
+logging:
+  level:
+    root: INFO
+    org.camunda: INFO

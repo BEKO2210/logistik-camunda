@@ -1,0 +1,16 @@
+# Docker / local
+*.log
+.camunda/
+camunda-db/
+
+# OS / IDE
+.DS_Store
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Secrets (falls später ergänzt)
+.env
+.env.*
+!.env.example
