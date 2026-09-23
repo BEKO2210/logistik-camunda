@@ -189,7 +189,7 @@ const TEMPLATES = {
   },
   we_qs_freigabe: {
     id: 'we_qs_freigabe',
-    name: 'Wareneingang → QS → Freigabe → Lagerzug',
+    name: 'Wareneingang → Einlagerung → QS → Freigabe → Einlagerung → Lagerzug',
     costPerOrderHour: 7800,
     steps: [
       makeStep({
@@ -1764,6 +1764,11 @@ function releaseStationBooking(station, orderId) {
   if (open) {
     open.status = 'frei';
     open.freedAtMs = state.simElapsedMs;
+    const idx = state.bookings.indexOf(open);
+    if (idx > 0) {
+      state.bookings.splice(idx, 1);
+      state.bookings.unshift(open);
+    }
   } else {
     state.bookings.unshift({
       id: uid('bk'),
@@ -1822,7 +1827,10 @@ function renderBookingPanel() {
   }
   panel.appendChild(activeBox);
 
-  const recent = state.bookings.filter((b) => b.status === 'frei').slice(0, 25);
+  const recent = state.bookings
+    .filter((b) => b.status === 'frei')
+    .sort((a, b) => (b.freedAtMs ?? b.simTimeMs) - (a.freedAtMs ?? a.simTimeMs))
+    .slice(0, 25);
   const recentBox = el('div', { className: 'booking-section' }, [
     el('div', { className: 'booking-section-title', text: 'Zuletzt freigegeben' }),
   ]);
