@@ -15,13 +15,14 @@
 1. Browser-Tab: Live-Demo öffnen (Laptop + Beamer / Share-Screen).  
 2. Zweiten Tab optional: Cockpit `http://localhost:8080/` (falls Docker läuft).  
 3. Seite einmal laden — BPMN sollte sichtbar sein.  
-4. €/Auftrag/h auf **8.500** lassen (oder Kundennähe anpassen und als Annahme nennen).
+4. €/Auftrag/h auf **8.500** lassen (oder Kundennähe anpassen und als Annahme nennen).  
+5. Optional **Prozess-Baukasten** vorbereiten: Template passend zum Kunden (KFZ/Montage, Wareneingang→QS, Buchung-first) oder „Leer“ + 3–4 Schritte — Selling Point: *„Ihre Linie in 2 Minuten nachbauen.“*
 
 ---
 
 ## Minute 0–1 · Framing
 
-> „Wir zeigen Ihren Auftrag von der Bestellung bis zum Versand als BPMN — mit **Buchungspunkten** an jeder Station. Wenn Kapazität fehlt, sehen Sie den Engpass sofort — und eine **€-Kennzahl** für den Stau. Klar gekennzeichnet als Demo-Annahme.“
+> „Wir zeigen Ihren Auftrag End-to-End als BPMN — mit **Buchungspunkten** und einem **Prozess-Baukasten**: Ihre Stationen, Ihre Reihenfolge. Wenn Kapazität fehlt, sehen Sie den Engpass sofort — und eine **€-Kennzahl** für den Stau. Klar gekennzeichnet als Demo-Annahme.“
 
 Klick: Titel „Operations Control Tower“ kurz stehen lassen — kein Hero-Blog, Control Tower.
 
@@ -72,6 +73,19 @@ Details: [DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md)
 
 ---
 
+## Minute 7–8 · Prozess-Baukasten (Wow-Moment)
+
+> „Kein One-Size-Prozess: Sie stecken Ihre Stationen als Bauschritte — Name, Typ, Kapazität, Servicezeit, Buchung ja/nein. Diagramm und Simulation folgen sofort.“
+
+1. Rechts **Prozess-Baukasten** zeigen.  
+2. Template wechseln (z. B. Wareneingang→QS) **oder** einen Schritt zwischen zwei Stationen einfügen → **Übernehmen**.  
+3. Kurz starten: Tokens laufen auf *ihrer* Linie.  
+4. Optional Export JSON: „Das ist Ihr Kundenprofil für den nächsten Termin.“
+
+Dann weiter mit Close — oder Cockpit, wenn Zeit.
+
+---
+
 ## Minute 8–10 · Close & Next Steps
 
 1. Reset → Normalbetrieb → ein ruhiger Zustand.  
@@ -98,8 +112,9 @@ Details: [DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md)
 | 3 | Peak-Last → Engpass + €-Stau zeigen |
 | 4 | +10 Aufträge (optional) |
 | 5 | Kapazität+ → Entlastung |
-| 6 | Optional Cockpit |
-| 7 | Close / Next Steps |
+| 6 | Baukasten: Schritt einfügen / Template → Übernehmen |
+| 7 | Optional Cockpit |
+| 8 | Close / Next Steps |
 
 ---
 

@@ -1,7 +1,7 @@
 # Logistik Camunda — Operations Control Tower (Enterprise Demo)
 
 > **Live Demo (Browser):** [https://beko2210.github.io/logistik-camunda/](https://beko2210.github.io/logistik-camunda/)  
-> Interaktive BPMN-Prozesskarte mit Executive-KPIs, Szenario-Presets, Pitch-Modus und €-Stau — ohne Docker.  
+> Interaktive BPMN-Prozesskarte mit **Prozess-Baukasten** (firmenspezifische Linien), Executive-KPIs, Szenario-Presets, Pitch-Modus und €-Stau — ohne Docker.  
 > **Pitch-Skript (10 Min):** [DEMO-PITCH.md](./DEMO-PITCH.md)
 
 Kundenfähige Demo für Logistik-/Fertigungsprozesse: **Buchungspunkte** an jeder Station, sichtbare **Engpässe** (Warteschlangen / Auslastung) und eine klar gekennzeichnete **€-Impact-Kennzahl** (Demo-Annahme). Geeignet für C-Level- / Enterprise-Pitches — optional ergänzt um Camunda Cockpit als „Engine-Wahrheit“.
@@ -18,11 +18,12 @@ Kundenfähige Demo für Logistik-/Fertigungsprozesse: **Buchungspunkte** an jede
 
 ## Was die Live-Demo zeigt
 
-1. **Prozesskarte** — Logistik-Auftrag End-to-End (Material → Vormontage → Produktion → QS → Versand)  
-2. **Executive KPI-Strip** — Durchsatz, WIP, Ø Durchlaufzeit, Engpass-Station, **€-Stau** (wartende Tokens × €/Auftrag/h, Default 8.500 € — Demo-Annahme)  
-3. **Szenarien** — Normalbetrieb · Peak-Last · Fehlteile-Krise · Kapazität+  
-4. **Pitch-Modus** — 5-Schritt-Overlay für den Vertriebs-/Executive-Walkthrough  
-5. **Stations-Board** — Kapazität, in Arbeit, Warteschlange, Auslastung %, €-Anteil am Stau  
+1. **Prozess-Baukasten** — Stationen manuell einfügen, umordnen, löschen; Typ/Kapazität/Servicezeit/Buchungspflicht; Templates (KFZ/Montage, Wareneingang→QS, Buchung-first Lean, Leer); Export/Import JSON; Persistenz in `localStorage`  
+2. **Prozesskarte** — BPMN wird clientseitig aus der aktuellen Linie generiert (Start → UserTasks → Ende)  
+3. **Executive KPI-Strip** — Durchsatz, WIP, Ø Durchlaufzeit, Engpass-Station, **€-Stau** (wartende Tokens × €/Auftrag/h — Demo-Annahme)  
+4. **Szenarien** — Normalbetrieb · Peak-Last · Fehlteile-Krise · Kapazität+ (wirken auf die aktuelle Config)  
+5. **Pitch-Modus** — 5-Schritt-Overlay für den Vertriebs-/Executive-Walkthrough  
+6. **Stations-Board** — Kapazität, in Arbeit, Warteschlange, Auslastung %, €-Anteil am Stau  
 
 ---
 
@@ -41,6 +42,20 @@ npm run dev
 Build: `npm run build` (Base-Path `/logistik-camunda/`, Ausgabe `web/dist`). Deploy via GitHub Actions → Pages.
 
 Ausführliches Pitch-Skript: **[DEMO-PITCH.md](./DEMO-PITCH.md)** · Cockpit-Storyline: **[DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md)**
+
+---
+
+## Prozess-Baukasten (firmenspezifisch)
+
+Jede Firma hat eine andere Fließrichtung (Wareneneingang→QS zuerst, Buchung zuerst, Schritte überspringen). Im Live-Control-Tower:
+
+1. Rechts **Prozess-Baukasten** öffnen (oder Toolbar-Button).  
+2. Template wählen **oder** „Schritt einfügen“ (Typ + Name, Einfügen nach Auswahl).  
+3. Mit ↑↓ umordnen, inline editieren (Name, Typ, Kapazität, Servicezeit-Range, Buchungspflicht), löschen.  
+4. **Übernehmen** → BPMN + Simulation werden neu aufgebaut.  
+5. **Export JSON / Import JSON** für Kundenprofile; aktivierte Config liegt unter `localStorage`-Key `logistik-process-config`.
+
+So lässt sich im Meeting die Kundenlinie in ca. **2 Minuten** nachbauen — ohne fest verdrahteten One-Size-Prozess.
 
 ---
 

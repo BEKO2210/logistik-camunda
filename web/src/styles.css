@@ -194,7 +194,7 @@ body {
   margin: 0 auto;
   padding: 14px 20px 24px;
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr 380px;
   gap: 14px;
   align-items: start;
 }
@@ -808,4 +808,236 @@ body {
   .toolbar-title h1 {
     font-size: 16px;
   }
+}
+
+
+/* ——— Prozess-Baukasten ——— */
+.btn-on-brand {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+.btn-on-brand:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.baukasten-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-dark);
+  background: var(--info-bg);
+  border: 1px solid #c7e0f4;
+  border-radius: 12px;
+  padding: 2px 8px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#baukasten-card.bk-flash {
+  box-shadow: 0 0 0 2px var(--brand), var(--shadow-lg);
+  transition: box-shadow 0.2s;
+}
+
+.bk-meta {
+  margin-bottom: 10px;
+}
+
+.bk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.bk-field > span:first-child {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.bk-field input[type="text"],
+.bk-field input[type="number"],
+.bk-field select,
+.bk-insert input,
+.bk-insert select {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  background: var(--surface);
+  width: 100%;
+}
+
+.bk-section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 8px 0 6px;
+}
+
+.bk-templates {
+  margin-bottom: 8px;
+}
+
+.bk-template-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bk-template-btns .btn {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.bk-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.bk-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+}
+
+.bk-step {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.bk-step:hover {
+  border-color: var(--border-strong);
+}
+
+.bk-step.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+  background: #fff;
+}
+
+.bk-step-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.bk-step-idx {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 14px;
+}
+
+.bk-step-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--info-bg);
+  color: var(--brand-dark);
+  border-radius: 10px;
+  padding: 2px 7px;
+}
+
+.bk-step-move {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.bk-icon {
+  padding: 2px 6px !important;
+  min-width: 24px;
+  justify-content: center;
+  font-size: 12px !important;
+}
+
+.bk-del {
+  color: var(--danger) !important;
+}
+
+.bk-step-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bk-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bk-range input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bk-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bk-insert {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.bk-insert #btn-bk-insert {
+  grid-column: 1 / -1;
+}
+
+.bk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.bk-actions .btn {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+}
+
+.bk-footnote {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }

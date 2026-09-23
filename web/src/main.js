@@ -1,6 +1,6 @@
 /**
  * Operations Control Tower — Logistik End-to-End
- * Vite + bpmn-js NavigatedViewer + Stations-Simulation (Enterprise Demo)
+ * Vite + bpmn-js NavigatedViewer + Prozess-Baukasten (firmenspezifisch)
  */
 import NavigatedViewer from 'bpmn-js/lib/NavigatedViewer';
 import 'bpmn-js/dist/assets/diagram-js.css';
@@ -8,51 +8,263 @@ import 'bpmn-js/dist/assets/bpmn-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
 import './styles.css';
 
-/** Happy-Path-Stationen mit Buchungskapazität (Engpass: Vormontage). */
-const STATIONS_BASE = [
-  { id: 'Task_MaterialBuchung', name: 'Material-/Lager-Buchung', capacity: 4, serviceMs: [400, 900] },
-  { id: 'Task_Vormontage', name: 'Vormontage', capacity: 2, serviceMs: [900, 1600] },
-  { id: 'Task_Produktion', name: 'Produktion / Montage', capacity: 3, serviceMs: [700, 1300] },
-  { id: 'Task_QS', name: 'QS / Freigabe', capacity: 3, serviceMs: [500, 1000] },
-  { id: 'Task_VersandBuchung', name: 'Versand-Buchung', capacity: 4, serviceMs: [350, 800] },
+const STORAGE_KEY = 'logistik-process-config';
+const DEFAULT_EUR_PER_ORDER_HOUR = 8500;
+
+const STEP_TYPES = [
+  { id: 'buchung', label: 'Buchung' },
+  { id: 'prozess', label: 'Prozess' },
+  { id: 'qs', label: 'QS' },
+  { id: 'lager', label: 'Lager' },
+  { id: 'versand', label: 'Versand' },
+  { id: 'custom', label: 'Custom' },
 ];
 
-const BPMN_URL = `${import.meta.env.BASE_URL}logistik-auftrag.bpmn`;
+const TYPE_DEFAULTS = {
+  buchung: { capacity: 4, serviceMs: [350, 800], booking: true },
+  prozess: { capacity: 2, serviceMs: [800, 1500], booking: true },
+  qs: { capacity: 2, serviceMs: [500, 1200], booking: true },
+  lager: { capacity: 4, serviceMs: [400, 900], booking: true },
+  versand: { capacity: 4, serviceMs: [350, 800], booking: true },
+  custom: { capacity: 3, serviceMs: [500, 1000], booking: false },
+};
 
-/** Demo-Annahme: Kosten eines verzögerten Auftrags pro Stunde (EUR). */
-const DEFAULT_EUR_PER_ORDER_HOUR = 8500;
+function stepDefaults(type) {
+  const d = TYPE_DEFAULTS[type] || TYPE_DEFAULTS.custom;
+  return { capacity: d.capacity, serviceMs: [...d.serviceMs], booking: d.booking };
+}
+
+function uid(prefix = 's') {
+  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function makeStep(partial) {
+  const type = partial.type || 'custom';
+  const defaults = stepDefaults(type);
+  return {
+    id: partial.id || uid('s'),
+    name: partial.name || 'Neuer Schritt',
+    type,
+    capacity: partial.capacity ?? defaults.capacity,
+    serviceMs: Array.isArray(partial.serviceMs)
+      ? [...partial.serviceMs]
+      : [...defaults.serviceMs],
+    booking: partial.booking ?? defaults.booking,
+  };
+}
+
+/** Templates: different company pipelines */
+const TEMPLATES = {
+  kfz: {
+    id: 'kfz',
+    name: 'KFZ/Montage',
+    costPerOrderHour: 8500,
+    steps: [
+      makeStep({
+        id: 'Task_MaterialBuchung',
+        name: 'Material-/Lager-Buchung',
+        type: 'lager',
+        capacity: 4,
+        serviceMs: [400, 900],
+        booking: true,
+      }),
+      makeStep({
+        id: 'Task_Vormontage',
+        name: 'Vormontage',
+        type: 'prozess',
+        capacity: 2,
+        serviceMs: [900, 1600],
+        booking: true,
+      }),
+      makeStep({
+        id: 'Task_Produktion',
+        name: 'Produktion / Montage',
+        type: 'prozess',
+        capacity: 3,
+        serviceMs: [700, 1300],
+        booking: true,
+      }),
+      makeStep({
+        id: 'Task_QS',
+        name: 'QS / Freigabe',
+        type: 'qs',
+        capacity: 3,
+        serviceMs: [500, 1000],
+        booking: true,
+      }),
+      makeStep({
+        id: 'Task_VersandBuchung',
+        name: 'Versand-Buchung',
+        type: 'versand',
+        capacity: 4,
+        serviceMs: [350, 800],
+        booking: true,
+      }),
+    ],
+  },
+  wareneingang_qs: {
+    id: 'wareneingang_qs',
+    name: 'Wareneingang→QS zuerst',
+    costPerOrderHour: 7200,
+    steps: [
+      makeStep({
+        id: 's_we',
+        name: 'Wareneingang',
+        type: 'lager',
+        capacity: 5,
+        serviceMs: [300, 700],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_qs_in',
+        name: 'QS Eingang',
+        type: 'qs',
+        capacity: 2,
+        serviceMs: [600, 1400],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_buchung',
+        name: 'Bestandsbuchung',
+        type: 'buchung',
+        capacity: 3,
+        serviceMs: [400, 900],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_einlagern',
+        name: 'Einlagern',
+        type: 'lager',
+        capacity: 4,
+        serviceMs: [500, 1000],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_bereit',
+        name: 'Bereitstellung',
+        type: 'prozess',
+        capacity: 3,
+        serviceMs: [450, 900],
+        booking: false,
+      }),
+    ],
+  },
+  buchung_first: {
+    id: 'buchung_first',
+    name: 'Buchung-first Lean',
+    costPerOrderHour: 6500,
+    steps: [
+      makeStep({
+        id: 's_bf_book',
+        name: 'Auftrag buchen',
+        type: 'buchung',
+        capacity: 3,
+        serviceMs: [250, 550],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_bf_pick',
+        name: 'Kommissionierung',
+        type: 'lager',
+        capacity: 4,
+        serviceMs: [500, 1100],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_bf_pack',
+        name: 'Packen',
+        type: 'prozess',
+        capacity: 3,
+        serviceMs: [400, 800],
+        booking: false,
+      }),
+      makeStep({
+        id: 's_bf_ship',
+        name: 'Versand freigeben',
+        type: 'versand',
+        capacity: 4,
+        serviceMs: [300, 700],
+        booking: true,
+      }),
+    ],
+  },
+  leer: {
+    id: 'leer',
+    name: 'Leer (Custom)',
+    costPerOrderHour: 8500,
+    steps: [],
+  },
+};
+
+function cloneConfig(cfg) {
+  return JSON.parse(JSON.stringify(cfg));
+}
+
+function normalizeConfig(raw) {
+  if (!raw || typeof raw !== 'object') return cloneConfig(TEMPLATES.kfz);
+  const steps = Array.isArray(raw.steps)
+    ? raw.steps.map((s) => makeStep(s || {}))
+    : [];
+  return {
+    id: String(raw.id || 'custom'),
+    name: String(raw.name || 'Mein Werk'),
+    costPerOrderHour:
+      Number.isFinite(Number(raw.costPerOrderHour)) && Number(raw.costPerOrderHour) >= 0
+        ? Number(raw.costPerOrderHour)
+        : DEFAULT_EUR_PER_ORDER_HOUR,
+    steps,
+  };
+}
+
+function loadStoredConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return normalizeConfig(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function persistConfig(cfg) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  } catch {
+    /* ignore quota */
+  }
+}
 
 const SCENARIOS = {
   normal: {
     id: 'normal',
     label: 'Normalbetrieb',
     spawnIntervalMs: 700,
-    materialMult: 1,
-    vormontageCapacity: 2,
+    firstServiceMult: 1,
+    capacityMode: 'base',
     crisisChance: 0,
   },
   peak: {
     id: 'peak',
     label: 'Peak-Last',
     spawnIntervalMs: 320,
-    materialMult: 1,
-    vormontageCapacity: 2,
+    firstServiceMult: 1,
+    capacityMode: 'base',
     crisisChance: 0,
   },
   fehlteile: {
     id: 'fehlteile',
     label: 'Fehlteile-Krise',
     spawnIntervalMs: 650,
-    materialMult: 2.2,
-    vormontageCapacity: 2,
+    firstServiceMult: 2.2,
+    capacityMode: 'base',
     crisisChance: 0.18,
   },
   kapazitaet: {
     id: 'kapazitaet',
     label: 'Kapazität+',
     spawnIntervalMs: 700,
-    materialMult: 1,
-    vormontageCapacity: 5,
+    firstServiceMult: 1,
+    capacityMode: 'boost',
     crisisChance: 0,
   },
 };
@@ -61,21 +273,22 @@ const PITCH_STEPS = [
   {
     title: '1 · Bestellung',
     body:
-      'Jeder Auftrag startet als Bestellung und durchläuft den End-to-End-Prozess. ' +
-      'Die Prozesskarte zeigt die Shopfloor-/Logistik-Logik als BPMN — transparent, auditierbar, erweiterbar.',
+      'Jeder Auftrag startet und durchläuft Ihre Linie End-to-End. ' +
+      'Die Prozesskarte zeigt die Shopfloor-/Logistik-Logik als BPMN — transparent und erweiterbar. ' +
+      'Mit dem Prozess-Baukasten bauen Sie in Minuten die Linie des Kunden nach.',
   },
   {
     title: '2 · Buchungspunkte',
     body:
-      'An jeder Station gibt es einen Buchungspunkt (Kapazität). ' +
-      'Simulation startet jetzt: Tokens fließen — Material, Vormontage, Produktion, QS, Versand.',
+      'An konfigurierbaren Stationen gibt es Kapazität und optional Buchungspflicht. ' +
+      'Simulation startet: Tokens fließen entlang Ihrer Bauschritte.',
     startSim: true,
   },
   {
     title: '3 · Engpass sichtbar',
     body:
-      'Begrenzte Kapazität an der Vormontage erzeugt Warteschlangen. ' +
-      'Amber/Rot auf der Karte und im Stations-Board: der Bottleneck ist sofort sichtbar — ohne Excel.',
+      'Begrenzte Kapazität erzeugt Warteschlangen an der engsten Station. ' +
+      'Amber/Rot auf der Karte und im Stations-Board — Bottleneck ohne Excel.',
   },
   {
     title: '4 · €-Impact',
@@ -86,12 +299,15 @@ const PITCH_STEPS = [
   {
     title: '5 · Entscheidung',
     body:
-      'Szenario „Kapazität+“ oder Priorisierung: Entlastung der Vormontage, Sinken von WIP und €-Stau. ' +
-      'Nächster Schritt: echte Engine (Camunda Cockpit) + ERP/WMS-Anbindung.',
+      'Szenario „Kapazität+“ oder Priorisierung: Entlastung, Sinken von WIP und €-Stau. ' +
+      'Nächster Schritt: echte Engine (Camunda Cockpit) + ERP/WMS — und Ihre Linie aus dem Baukasten.',
   },
 ];
 
 const state = {
+  processConfig: normalizeConfig(TEMPLATES.kfz),
+  draftConfig: null,
+  selectedStepIndex: -1,
   running: false,
   paused: false,
   speed: 1,
@@ -101,20 +317,17 @@ const state = {
   spawnAccumMs: 0,
   spawnIntervalMs: SCENARIOS.normal.spawnIntervalMs,
   scenarioId: 'normal',
-  materialMult: 1,
+  firstServiceMult: 1,
   crisisChance: 0,
   eurPerOrderHour: DEFAULT_EUR_PER_ORDER_HOUR,
-  /** Rolling throughput samples (completed in last ~60s sim-time) */
   completedTimestamps: /** @type {number[]} */ ([]),
   simElapsedMs: 0,
-  /** Sum of lead times for completed orders */
   leadTimeSumMs: 0,
   leadTimeCount: 0,
-  waitingAccumMs: 0,
   orders: /** @type {Map<number, {id:number, stationIndex:number, remainingMs:number, waiting:boolean, startedAt:number}>} */ (
     new Map()
   ),
-  stations: cloneStations(SCENARIOS.normal.vormontageCapacity),
+  stations: /** @type {any[]} */ ([]),
   overlays: /** @type {Map<string, string>} */ (new Map()),
   viewer: /** @type {import('bpmn-js/lib/NavigatedViewer').default | null} */ (null),
   canvas: null,
@@ -128,15 +341,192 @@ const state = {
   pitchTimer: 0,
 };
 
-function cloneStations(vormontageCapacity) {
-  return STATIONS_BASE.map((s) => ({
-    ...s,
-    capacity: s.id === 'Task_Vormontage' ? vormontageCapacity : s.capacity,
-    serviceMs: [...s.serviceMs],
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/** Generate simple linear BPMN 2.0 XML from config.steps */
+function generateBpmnXml(config) {
+  const steps = config.steps || [];
+  const processName = escapeXml(config.name || 'Logistik-Auftrag');
+  const taskW = 120;
+  const taskH = 80;
+  const gap = 60;
+  const startX = 80;
+  const y = 120;
+  const startW = 36;
+  const endW = 36;
+
+  const nodes = [];
+  let x = startX;
+  nodes.push({ kind: 'start', id: 'Start_Bestellung', name: 'Bestellung', x, y: y + 22, w: startW, h: startW });
+  x += startW + gap;
+
+  for (const step of steps) {
+    nodes.push({
+      kind: 'task',
+      id: step.id,
+      name: step.name,
+      x,
+      y,
+      w: taskW,
+      h: taskH,
+    });
+    x += taskW + gap;
+  }
+
+  nodes.push({
+    kind: 'end',
+    id: 'End_Abgeschlossen',
+    name: 'Abgeschlossen',
+    x,
+    y: y + 22,
+    w: endW,
+    h: endW,
+  });
+
+  const flows = [];
+  for (let i = 0; i < nodes.length - 1; i++) {
+    flows.push({
+      id: `Flow_${i}`,
+      source: nodes[i].id,
+      target: nodes[i + 1].id,
+    });
+  }
+
+  const processParts = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    const incoming = i > 0 ? flows[i - 1].id : null;
+    const outgoing = i < flows.length ? flows[i].id : null;
+    if (n.kind === 'start') {
+      processParts.push(
+        `    <bpmn:startEvent id="${n.id}" name="${escapeXml(n.name)}">\n` +
+          (outgoing ? `      <bpmn:outgoing>${outgoing}</bpmn:outgoing>\n` : '') +
+          `    </bpmn:startEvent>`,
+      );
+    } else if (n.kind === 'end') {
+      processParts.push(
+        `    <bpmn:endEvent id="${n.id}" name="${escapeXml(n.name)}">\n` +
+          (incoming ? `      <bpmn:incoming>${incoming}</bpmn:incoming>\n` : '') +
+          `    </bpmn:endEvent>`,
+      );
+    } else {
+      processParts.push(
+        `    <bpmn:userTask id="${escapeXml(n.id)}" name="${escapeXml(n.name)}">\n` +
+          (incoming ? `      <bpmn:incoming>${incoming}</bpmn:incoming>\n` : '') +
+          (outgoing ? `      <bpmn:outgoing>${outgoing}</bpmn:outgoing>\n` : '') +
+          `    </bpmn:userTask>`,
+      );
+    }
+  }
+
+  for (const f of flows) {
+    processParts.push(
+      `    <bpmn:sequenceFlow id="${f.id}" sourceRef="${escapeXml(f.source)}" targetRef="${escapeXml(f.target)}" />`,
+    );
+  }
+
+  const diShapes = [];
+  for (const n of nodes) {
+    diShapes.push(
+      `      <bpmndi:BPMNShape id="${n.id}_di" bpmnElement="${escapeXml(n.id)}">\n` +
+        `        <dc:Bounds x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" />\n` +
+        `      </bpmndi:BPMNShape>`,
+    );
+  }
+
+  const diEdges = [];
+  for (let i = 0; i < flows.length; i++) {
+    const f = flows[i];
+    const src = nodes[i];
+    const tgt = nodes[i + 1];
+    const x1 = src.x + src.w;
+    const y1 = src.y + src.h / 2;
+    const x2 = tgt.x;
+    const y2 = tgt.y + tgt.h / 2;
+    diEdges.push(
+      `      <bpmndi:BPMNEdge id="${f.id}_di" bpmnElement="${f.id}">\n` +
+        `        <di:waypoint x="${x1}" y="${y1}" />\n` +
+        `        <di:waypoint x="${x2}" y="${y2}" />\n` +
+        `      </bpmndi:BPMNEdge>`,
+    );
+  }
+
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"\n` +
+    `                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"\n` +
+    `                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"\n` +
+    `                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"\n` +
+    `                  id="Definitions_Baukasten"\n` +
+    `                  targetNamespace="http://novaforge.de/logistik"\n` +
+    `                  exporter="Logistik Control Tower Baukasten"\n` +
+    `                  exporterVersion="1.0.0">\n` +
+    `  <bpmn:process id="LogistikAuftragDynamic" name="${processName}" isExecutable="true">\n` +
+    processParts.join('\n') +
+    `\n  </bpmn:process>\n` +
+    `  <bpmndi:BPMNDiagram id="BPMNDiagram_1">\n` +
+    `    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="LogistikAuftragDynamic">\n` +
+    diShapes.join('\n') +
+    `\n` +
+    diEdges.join('\n') +
+    `\n    </bpmndi:BPMNPlane>\n` +
+    `  </bpmndi:BPMNDiagram>\n` +
+    `</bpmn:definitions>\n`
+  );
+}
+
+function findNarrowestIndex(stations) {
+  let idx = -1;
+  let best = Infinity;
+  stations.forEach((s, i) => {
+    if (s.capacity < best) {
+      best = s.capacity;
+      idx = i;
+    }
+  });
+  return idx;
+}
+
+function buildStationsFromConfig(config, scenarioId) {
+  const sc = SCENARIOS[scenarioId] || SCENARIOS.normal;
+  const stations = (config.steps || []).map((step) => ({
+    id: step.id,
+    name: step.name,
+    type: step.type,
+    booking: !!step.booking,
+    baseCapacity: Math.max(1, Number(step.capacity) || 1),
+    capacity: Math.max(1, Number(step.capacity) || 1),
+    baseServiceMs: [...(step.serviceMs || [500, 1000])],
+    serviceMs: [...(step.serviceMs || [500, 1000])],
     queue: 0,
     processing: 0,
     waiting: 0,
   }));
+
+  if (stations.length > 0) {
+    const mult = sc.firstServiceMult || 1;
+    stations[0].serviceMs = [
+      stations[0].baseServiceMs[0] * mult,
+      stations[0].baseServiceMs[1] * mult,
+    ];
+  }
+
+  if (sc.capacityMode === 'boost' && stations.length > 0) {
+    const ni = findNarrowestIndex(stations);
+    if (ni >= 0) {
+      const base = stations[ni].baseCapacity;
+      stations[ni].capacity = Math.max(base + 3, Math.round(base * 2.5), 5);
+    }
+  }
+
+  return stations;
 }
 
 function el(tag, attrs = {}, children = []) {
@@ -147,7 +537,8 @@ function el(tag, attrs = {}, children = []) {
     else if (k === 'html') node.innerHTML = v;
     else if (k === 'style' && typeof v === 'string') node.setAttribute('style', v);
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
-    else if (v !== undefined && v !== null) node.setAttribute(k, String(v));
+    else if (v === true) node.setAttribute(k, '');
+    else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, String(v));
   }
   for (const c of [].concat(children)) {
     if (c == null) continue;
@@ -171,6 +562,17 @@ function formatMs(ms) {
   return `${(sec / 60).toFixed(1)} min`;
 }
 
+function typeLabel(typeId) {
+  return STEP_TYPES.find((t) => t.id === typeId)?.label || typeId;
+}
+
+function ensureDraft() {
+  if (!state.draftConfig) {
+    state.draftConfig = cloneConfig(state.processConfig);
+  }
+  return state.draftConfig;
+}
+
 function buildShell(root) {
   root.innerHTML = '';
 
@@ -183,7 +585,7 @@ function buildShell(root) {
     el('div', { className: 'topbar-spacer' }),
     el('span', {
       className: 'topbar-note',
-      text: 'Browser-Simulation · BPMN End-to-End · Demo-Annahmen gekennzeichnet',
+      text: 'Prozess-Baukasten · firmenspezifische Linien · Demo-Annahmen gekennzeichnet',
     }),
   ]);
 
@@ -193,10 +595,16 @@ function buildShell(root) {
         el('h1', { text: 'Operations Control Tower — Logistik End-to-End' }),
         el('p', {
           text:
-            'Buchungspunkte · Engpass-KPIs · €-Stau (Demo-Annahme) · Szenarien für Kapazität & Peak',
+            'Baukasten: Stationen einfügen · umordnen · löschen · Templates · Export/Import',
         }),
       ]),
       el('div', { className: 'toolbar-actions', id: 'toolbar-actions' }, [
+        el('button', {
+          className: 'btn btn-secondary btn-on-brand',
+          id: 'btn-baukasten-focus',
+          type: 'button',
+          text: 'Prozess-Baukasten',
+        }),
         el('button', {
           className: 'btn btn-accent',
           id: 'btn-pitch',
@@ -218,7 +626,7 @@ function buildShell(root) {
           id: 'eur-rate',
           min: '0',
           step: '500',
-          value: String(DEFAULT_EUR_PER_ORDER_HOUR),
+          value: String(state.eurPerOrderHour),
         }),
       ]),
     ]),
@@ -226,7 +634,7 @@ function buildShell(root) {
 
   const canvasCard = el('section', { className: 'card', id: 'process-card' }, [
     el('div', { className: 'card-header' }, [
-      el('h2', { text: 'Prozesskarte · Logistik-Auftrag' }),
+      el('h2', { id: 'process-title', text: `Prozesskarte · ${state.processConfig.name}` }),
       el('div', { className: 'controls', id: 'controls' }, [
         el('button', {
           className: 'btn btn-primary',
@@ -271,14 +679,86 @@ function buildShell(root) {
       el('div', { id: 'canvas' }, [el('div', { className: 'loading', text: 'BPMN wird geladen …' })]),
       el('div', {
         className: 'canvas-overlay-hint',
-        text: 'Badges = Warteschlange · Farbe = Auslastung vs. Kapazität',
+        text: 'Badges = Warteschlange · Farbe = Auslastung vs. Kapazität · Linie aus Baukasten',
       }),
       el('div', { className: 'pitch-overlay', id: 'pitch-overlay', hidden: 'true' }),
     ]),
   ]);
 
+  const baukastenCard = el('section', { className: 'card', id: 'baukasten-card' }, [
+    el('div', { className: 'card-header' }, [
+      el('h2', { text: 'Prozess-Baukasten' }),
+      el('span', { className: 'baukasten-hint', id: 'baukasten-active-name', text: state.processConfig.name }),
+    ]),
+    el('div', { className: 'card-body card-body-tight' }, [
+      el('div', { className: 'bk-meta' }, [
+        el('label', { className: 'bk-field' }, [
+          el('span', { text: 'Werk / Linie' }),
+          el('input', {
+            type: 'text',
+            id: 'bk-name',
+            value: state.processConfig.name,
+            autocomplete: 'off',
+          }),
+        ]),
+      ]),
+      el('div', { className: 'bk-templates' }, [
+        el('span', { className: 'bk-section-label', text: 'Templates' }),
+        el('div', { className: 'bk-template-btns', id: 'bk-template-btns' }),
+      ]),
+      el('div', { className: 'bk-section-label', text: 'Bauschritte' }),
+      el('div', { className: 'bk-steps', id: 'bk-steps' }),
+      el('div', { className: 'bk-insert' }, [
+        el('select', { id: 'bk-insert-type' }, STEP_TYPES.map((t) => el('option', { value: t.id, text: t.label }))),
+        el('input', {
+          type: 'text',
+          id: 'bk-insert-name',
+          placeholder: 'Name (optional)',
+          autocomplete: 'off',
+        }),
+        el('button', {
+          className: 'btn btn-primary',
+          id: 'btn-bk-insert',
+          type: 'button',
+          text: 'Schritt einfügen',
+        }),
+      ]),
+      el('div', { className: 'bk-actions' }, [
+        el('button', {
+          className: 'btn btn-primary',
+          id: 'btn-bk-apply',
+          type: 'button',
+          text: 'Übernehmen',
+        }),
+        el('button', {
+          className: 'btn btn-secondary',
+          id: 'btn-bk-export',
+          type: 'button',
+          text: 'Export JSON',
+        }),
+        el('button', {
+          className: 'btn btn-secondary',
+          id: 'btn-bk-import',
+          type: 'button',
+          text: 'Import JSON',
+        }),
+        el('input', {
+          type: 'file',
+          id: 'bk-import-file',
+          accept: 'application/json,.json',
+          hidden: 'true',
+        }),
+      ]),
+      el('p', {
+        className: 'bk-footnote',
+        text: 'Übernehmen baut Diagramm + Simulation neu. Profil wird lokal gespeichert.',
+      }),
+    ]),
+  ]);
+
   const sidebar = el('aside', { className: 'sidebar-col' }, [
-    el('section', { className: 'card' }, [
+    baukastenCard,
+    el('section', { className: 'card', style: 'margin-top:12px' }, [
       el('div', { className: 'card-header' }, [el('h2', { text: 'Stations-Board' })]),
       el('div', { className: 'card-body card-body-tight' }, [
         el('div', { className: 'station-list', id: 'station-list' }),
@@ -297,8 +777,8 @@ function buildShell(root) {
           className: 'footnote',
           html:
             '<strong>€-Stau</strong> = wartende Tokens × konfigurierbarer €/Auftrag/Stunde. ' +
-            'Standard 8.500 € — klar als <em>Demo-Annahme</em> gekennzeichnet, keine Kundendaten. ' +
-            'Vormontage startet mit Kapazität 2, damit der Engpass sichtbar wird.',
+            'Standard laut Profil — klar als <em>Demo-Annahme</em> gekennzeichnet. ' +
+            'Jede Firma = eigene Pipeline im Baukasten.',
         }),
       ]),
     ]),
@@ -313,13 +793,19 @@ function buildShell(root) {
   const footer = el('footer', { className: 'footer' }, [
     el('span', {
       html:
-        'Logistik Camunda · Operations Control Tower · BPMN <code>logistik-auftrag.bpmn</code> · ' +
-        'Browser-Simulation (optional: Camunda Cockpit lokal für Engine-Wahrheit)',
+        'Logistik Camunda · Prozess-Baukasten · BPMN dynamisch aus Schritten · ' +
+        'Browser-Simulation (optional: Camunda Cockpit lokal)',
     }),
   ]);
 
   root.append(topbar, toolbar, scenarioBar, main, footer);
+
+  state.draftConfig = cloneConfig(state.processConfig);
+  state.stations = buildStationsFromConfig(state.processConfig, state.scenarioId);
+
   renderScenarioButtons();
+  renderTemplateButtons();
+  renderBaukastenSteps();
   renderStationList();
   wireControls();
   updateKpis();
@@ -356,21 +842,368 @@ function renderScenarioButtons() {
   }
 }
 
-function applyScenario(id, { silent = false } = {}) {
+function renderTemplateButtons() {
+  const box = document.getElementById('bk-template-btns');
+  if (!box) return;
+  box.innerHTML = '';
+  for (const tpl of Object.values(TEMPLATES)) {
+    const btn = el('button', {
+      className: `btn btn-scenario bk-tpl${state.draftConfig?.id === tpl.id ? ' active' : ''}`,
+      type: 'button',
+      text: tpl.name,
+    });
+    btn.addEventListener('click', () => {
+      state.draftConfig = cloneConfig(tpl);
+      state.selectedStepIndex = state.draftConfig.steps.length ? 0 : -1;
+      const nameInput = document.getElementById('bk-name');
+      if (nameInput) nameInput.value = state.draftConfig.name;
+      renderTemplateButtons();
+      renderBaukastenSteps();
+      logEvent(`Template <strong>${tpl.name}</strong> in Entwurf geladen — „Übernehmen“ zum Anwenden`);
+    });
+    box.appendChild(btn);
+  }
+}
+
+function renderBaukastenSteps() {
+  const box = document.getElementById('bk-steps');
+  if (!box) return;
+  const draft = ensureDraft();
+  box.innerHTML = '';
+
+  if (!draft.steps.length) {
+    box.appendChild(
+      el('div', {
+        className: 'bk-empty',
+        text: 'Keine Schritte — Template wählen oder „Schritt einfügen“.',
+      }),
+    );
+    return;
+  }
+
+  draft.steps.forEach((step, index) => {
+    const selected = index === state.selectedStepIndex;
+    const row = el('div', {
+      className: `bk-step${selected ? ' selected' : ''}`,
+      'data-index': String(index),
+    });
+
+    row.appendChild(
+      el('div', { className: 'bk-step-head' }, [
+        el('button', {
+          className: 'btn btn-ghost bk-icon',
+          type: 'button',
+          title: 'Auswählen',
+          text: selected ? '●' : '○',
+          onClick: (e) => {
+            e.stopPropagation();
+            state.selectedStepIndex = index;
+            renderBaukastenSteps();
+          },
+        }),
+        el('span', { className: 'bk-step-idx', text: String(index + 1) }),
+        el('span', { className: 'bk-step-type', text: typeLabel(step.type) }),
+        el('div', { className: 'bk-step-move' }, [
+          el('button', {
+            className: 'btn btn-ghost bk-icon',
+            type: 'button',
+            title: 'Nach oben',
+            disabled: index === 0 ? 'true' : undefined,
+            text: '↑',
+            onClick: (e) => {
+              e.stopPropagation();
+              moveStep(index, -1);
+            },
+          }),
+          el('button', {
+            className: 'btn btn-ghost bk-icon',
+            type: 'button',
+            title: 'Nach unten',
+            disabled: index === draft.steps.length - 1 ? 'true' : undefined,
+            text: '↓',
+            onClick: (e) => {
+              e.stopPropagation();
+              moveStep(index, 1);
+            },
+          }),
+          el('button', {
+            className: 'btn btn-ghost bk-icon bk-del',
+            type: 'button',
+            title: 'Löschen',
+            text: '✕',
+            onClick: (e) => {
+              e.stopPropagation();
+              deleteStep(index);
+            },
+          }),
+        ]),
+      ]),
+    );
+
+    const fields = el('div', { className: 'bk-step-fields' });
+
+    fields.appendChild(
+      fieldRow('Name', el('input', {
+        type: 'text',
+        value: step.name,
+        onInput: (e) => {
+          draft.steps[index].name = e.target.value;
+          draft.id = 'custom';
+        },
+      })),
+    );
+
+    const typeSel = el('select');
+    for (const t of STEP_TYPES) {
+      typeSel.appendChild(
+        el('option', {
+          value: t.id,
+          text: t.label,
+          selected: step.type === t.id ? 'true' : undefined,
+        }),
+      );
+    }
+    typeSel.addEventListener('change', (e) => {
+      const newType = e.target.value;
+      const d = stepDefaults(newType);
+      draft.steps[index].type = newType;
+      draft.steps[index].capacity = d.capacity;
+      draft.steps[index].serviceMs = [...d.serviceMs];
+      draft.steps[index].booking = d.booking;
+      draft.id = 'custom';
+      renderBaukastenSteps();
+    });
+    fields.appendChild(fieldRow('Typ', typeSel));
+
+    fields.appendChild(
+      fieldRow(
+        'Kapazität',
+        el('input', {
+          type: 'number',
+          min: '1',
+          max: '50',
+          value: String(step.capacity),
+          onInput: (e) => {
+            draft.steps[index].capacity = Math.max(1, Number(e.target.value) || 1);
+            draft.id = 'custom';
+          },
+        }),
+      ),
+    );
+
+    fields.appendChild(
+      fieldRow(
+        'Service ms (min–max)',
+        el('div', { className: 'bk-range' }, [
+          el('input', {
+            type: 'number',
+            min: '50',
+            step: '50',
+            value: String(step.serviceMs[0]),
+            onInput: (e) => {
+              draft.steps[index].serviceMs[0] = Math.max(50, Number(e.target.value) || 50);
+              draft.id = 'custom';
+            },
+          }),
+          el('span', { text: '–' }),
+          el('input', {
+            type: 'number',
+            min: '50',
+            step: '50',
+            value: String(step.serviceMs[1]),
+            onInput: (e) => {
+              draft.steps[index].serviceMs[1] = Math.max(50, Number(e.target.value) || 50);
+              draft.id = 'custom';
+            },
+          }),
+        ]),
+      ),
+    );
+
+    const bookLabel = el('label', { className: 'bk-check' }, [
+      el('input', {
+        type: 'checkbox',
+        checked: step.booking ? 'true' : undefined,
+        onChange: (e) => {
+          draft.steps[index].booking = !!e.target.checked;
+          draft.id = 'custom';
+        },
+      }),
+      el('span', { text: 'Buchungspflicht' }),
+    ]);
+    fields.appendChild(bookLabel);
+
+    row.appendChild(fields);
+    row.addEventListener('click', () => {
+      state.selectedStepIndex = index;
+      renderBaukastenSteps();
+    });
+    box.appendChild(row);
+  });
+}
+
+function fieldRow(label, control) {
+  return el('label', { className: 'bk-field' }, [el('span', { text: label }), control]);
+}
+
+function moveStep(index, delta) {
+  const draft = ensureDraft();
+  const target = index + delta;
+  if (target < 0 || target >= draft.steps.length) return;
+  const tmp = draft.steps[index];
+  draft.steps[index] = draft.steps[target];
+  draft.steps[target] = tmp;
+  draft.id = 'custom';
+  state.selectedStepIndex = target;
+  renderBaukastenSteps();
+  renderTemplateButtons();
+}
+
+function deleteStep(index) {
+  const draft = ensureDraft();
+  draft.steps.splice(index, 1);
+  draft.id = 'custom';
+  if (state.selectedStepIndex >= draft.steps.length) {
+    state.selectedStepIndex = draft.steps.length - 1;
+  }
+  renderBaukastenSteps();
+  renderTemplateButtons();
+}
+
+function insertStep() {
+  const draft = ensureDraft();
+  const typeEl = document.getElementById('bk-insert-type');
+  const nameEl = document.getElementById('bk-insert-name');
+  const type = typeEl?.value || 'custom';
+  const name = (nameEl?.value || '').trim() || `${typeLabel(type)} ${draft.steps.length + 1}`;
+  const step = makeStep({ type, name });
+  const insertAt =
+    state.selectedStepIndex >= 0 ? state.selectedStepIndex + 1 : draft.steps.length;
+  draft.steps.splice(insertAt, 0, step);
+  draft.id = 'custom';
+  state.selectedStepIndex = insertAt;
+  if (nameEl) nameEl.value = '';
+  renderBaukastenSteps();
+  renderTemplateButtons();
+  logEvent(`Schritt <strong>${escapeXml(name)}</strong> eingefügt (Entwurf)`);
+}
+
+async function applyDraftConfig() {
+  const draft = ensureDraft();
+  const nameInput = document.getElementById('bk-name');
+  if (nameInput) draft.name = nameInput.value.trim() || draft.name || 'Mein Werk';
+
+  // Normalize service ranges
+  for (const s of draft.steps) {
+    let a = Math.max(50, Number(s.serviceMs[0]) || 50);
+    let b = Math.max(50, Number(s.serviceMs[1]) || 50);
+    if (b < a) [a, b] = [b, a];
+    s.serviceMs = [a, b];
+    s.capacity = Math.max(1, Number(s.capacity) || 1);
+  }
+
+  state.processConfig = normalizeConfig(draft);
+  state.draftConfig = cloneConfig(state.processConfig);
+  state.eurPerOrderHour = state.processConfig.costPerOrderHour;
+  const eurRate = document.getElementById('eur-rate');
+  if (eurRate) eurRate.value = String(state.eurPerOrderHour);
+
+  persistConfig(state.processConfig);
+
+  const title = document.getElementById('process-title');
+  if (title) title.textContent = `Prozesskarte · ${state.processConfig.name}`;
+  const activeName = document.getElementById('baukasten-active-name');
+  if (activeName) activeName.textContent = state.processConfig.name;
+
+  hardResetSimState();
+  state.stations = buildStationsFromConfig(state.processConfig, state.scenarioId);
+  applyScenario(state.scenarioId, { silent: true, skipRebuild: true });
+
+  renderTemplateButtons();
+  renderBaukastenSteps();
+  renderStationList();
+  updateKpis();
+
+  try {
+    await reloadDiagramFromConfig();
+    logEvent(
+      `Linie <strong>${escapeXml(state.processConfig.name)}</strong> übernommen ` +
+        `(${state.processConfig.steps.length} Schritte)`,
+    );
+  } catch (err) {
+    console.error(err);
+    logEvent(`BPMN-Fehler: ${err.message || err}`);
+  }
+}
+
+function hardResetSimState() {
+  state.running = false;
+  state.paused = false;
+  state.orders.clear();
+  state.activeOrders = 0;
+  state.completedOrders = 0;
+  state.nextOrderId = 1;
+  state.spawnAccumMs = 0;
+  state.lastTs = 0;
+  state.simElapsedMs = 0;
+  state.completedTimestamps = [];
+  state.leadTimeSumMs = 0;
+  state.leadTimeCount = 0;
+  if (state.rafId) {
+    cancelAnimationFrame(state.rafId);
+    state.rafId = 0;
+  }
+  clearHighlights();
+}
+
+function exportConfigJson() {
+  const cfg = state.draftConfig ? normalizeConfig(ensureDraft()) : state.processConfig;
+  const nameInput = document.getElementById('bk-name');
+  if (nameInput) cfg.name = nameInput.value.trim() || cfg.name;
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `logistik-prozess-${(cfg.id || 'custom').replace(/\W+/g, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  logEvent('Prozess-Konfiguration <strong>exportiert</strong>');
+}
+
+function importConfigJson(file) {
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const parsed = JSON.parse(String(reader.result || ''));
+      state.draftConfig = normalizeConfig(parsed);
+      state.selectedStepIndex = state.draftConfig.steps.length ? 0 : -1;
+      const nameInput = document.getElementById('bk-name');
+      if (nameInput) nameInput.value = state.draftConfig.name;
+      renderTemplateButtons();
+      renderBaukastenSteps();
+      logEvent(
+        `Import geladen: <strong>${escapeXml(state.draftConfig.name)}</strong> — „Übernehmen“ zum Anwenden`,
+      );
+    } catch (err) {
+      logEvent(`Import fehlgeschlagen: ${err.message || err}`);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function applyScenario(id, { silent = false, skipRebuild = false } = {}) {
   const sc = SCENARIOS[id];
   if (!sc) return;
   state.scenarioId = id;
   state.spawnIntervalMs = sc.spawnIntervalMs;
-  state.materialMult = sc.materialMult;
+  state.firstServiceMult = sc.firstServiceMult;
   state.crisisChance = sc.crisisChance;
 
-  const vorm = state.stations.find((s) => s.id === 'Task_Vormontage');
-  if (vorm) vorm.capacity = sc.vormontageCapacity;
-
-  const mat = state.stations.find((s) => s.id === 'Task_MaterialBuchung');
-  if (mat) {
-    const base = STATIONS_BASE[0].serviceMs;
-    mat.serviceMs = [base[0] * sc.materialMult, base[1] * sc.materialMult];
+  if (!skipRebuild) {
+    state.stations = buildStationsFromConfig(state.processConfig, id);
+  } else {
+    // capacities already set; re-apply scenario modifiers on current stations from config
+    state.stations = buildStationsFromConfig(state.processConfig, id);
   }
 
   renderScenarioButtons();
@@ -382,47 +1215,74 @@ function applyScenario(id, { silent = false } = {}) {
 }
 
 function wireControls() {
-  const btnStart = document.getElementById('btn-start');
-  const btnPause = document.getElementById('btn-pause');
-  const btnReset = document.getElementById('btn-reset');
-  const btnBatch = document.getElementById('btn-batch');
-  const btnPitch = document.getElementById('btn-pitch');
-  const speed = document.getElementById('speed');
-  const speedLabel = document.getElementById('speed-label');
-  const eurRate = document.getElementById('eur-rate');
-
-  btnStart.addEventListener('click', () => {
+  document.getElementById('btn-start')?.addEventListener('click', () => {
+    if (!state.processConfig.steps.length) {
+      logEvent('Keine Schritte — bitte im <strong>Baukasten</strong> Stationen anlegen');
+      return;
+    }
     if (!state.running) startSimulation();
     else if (state.paused) resumeSimulation();
   });
 
-  btnPause.addEventListener('click', () => {
+  document.getElementById('btn-pause')?.addEventListener('click', () => {
     if (state.running && !state.paused) pauseSimulation();
   });
 
-  btnReset.addEventListener('click', () => resetSimulation());
+  document.getElementById('btn-reset')?.addEventListener('click', () => resetSimulation());
 
-  btnBatch.addEventListener('click', () => {
+  document.getElementById('btn-batch')?.addEventListener('click', () => {
+    if (!state.processConfig.steps.length) {
+      logEvent('Keine Schritte vorhanden');
+      return;
+    }
     for (let i = 0; i < 10; i++) spawnOrder();
     recountStations();
     syncVisuals();
     logEvent('<strong>+10 Aufträge</strong> injiziert');
   });
 
-  btnPitch.addEventListener('click', () => {
+  document.getElementById('btn-pitch')?.addEventListener('click', () => {
     if (state.pitchActive) stopPitch();
     else startPitch();
   });
 
-  speed.addEventListener('input', () => {
-    state.speed = Number(speed.value) || 1;
-    speedLabel.textContent = `${state.speed}×`;
+  document.getElementById('btn-baukasten-focus')?.addEventListener('click', () => {
+    document.getElementById('baukasten-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('baukasten-card')?.classList.add('bk-flash');
+    setTimeout(() => document.getElementById('baukasten-card')?.classList.remove('bk-flash'), 1200);
   });
 
-  eurRate.addEventListener('change', () => {
-    const v = Number(eurRate.value);
+  const speed = document.getElementById('speed');
+  const speedLabel = document.getElementById('speed-label');
+  speed?.addEventListener('input', () => {
+    state.speed = Number(speed.value) || 1;
+    if (speedLabel) speedLabel.textContent = `${state.speed}×`;
+  });
+
+  document.getElementById('eur-rate')?.addEventListener('change', (e) => {
+    const v = Number(e.target.value);
     state.eurPerOrderHour = Number.isFinite(v) && v >= 0 ? v : DEFAULT_EUR_PER_ORDER_HOUR;
+    state.processConfig.costPerOrderHour = state.eurPerOrderHour;
+    if (state.draftConfig) state.draftConfig.costPerOrderHour = state.eurPerOrderHour;
+    persistConfig(state.processConfig);
     updateKpis();
+  });
+
+  document.getElementById('bk-name')?.addEventListener('input', (e) => {
+    ensureDraft().name = e.target.value;
+    ensureDraft().id = 'custom';
+  });
+
+  document.getElementById('btn-bk-insert')?.addEventListener('click', () => insertStep());
+  document.getElementById('btn-bk-apply')?.addEventListener('click', () => applyDraftConfig());
+  document.getElementById('btn-bk-export')?.addEventListener('click', () => exportConfigJson());
+  document.getElementById('btn-bk-import')?.addEventListener('click', () => {
+    document.getElementById('bk-import-file')?.click();
+  });
+  document.getElementById('bk-import-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) importConfigJson(file);
+    e.target.value = '';
   });
 }
 
@@ -431,8 +1291,11 @@ function wireControls() {
 function startPitch() {
   state.pitchActive = true;
   state.pitchStep = 0;
-  document.getElementById('btn-pitch').textContent = 'Pitch beenden';
-  document.getElementById('btn-pitch').classList.add('active');
+  const btn = document.getElementById('btn-pitch');
+  if (btn) {
+    btn.textContent = 'Pitch beenden';
+    btn.classList.add('active');
+  }
   showPitchStep(0);
   schedulePitchAdvance();
   logEvent('Pitch-Modus <strong>gestartet</strong>');
@@ -476,9 +1339,7 @@ function showPitchStep(index) {
 
   const dots = el('div', { className: 'pitch-dots' });
   for (let i = 0; i < PITCH_STEPS.length; i++) {
-    dots.appendChild(
-      el('span', { className: `pitch-dot${i === index ? ' active' : ''}` }),
-    );
+    dots.appendChild(el('span', { className: `pitch-dot${i === index ? ' active' : ''}` }));
   }
 
   ov.append(
@@ -523,16 +1384,19 @@ function showPitchStep(index) {
     ]),
   );
 
-  if (step.startSim && !state.running) {
+  if (step.startSim && !state.running && state.processConfig.steps.length) {
     startSimulation();
   }
-  if (index === 3 && state.scenarioId === 'normal') {
-    applyScenario('peak', { silent: true });
-    logEvent('Pitch: Peak-Last für €-Impact');
-  }
-  if (index === 4) {
-    applyScenario('kapazitaet', { silent: true });
-    logEvent('Pitch: Kapazität+ zur Entlastung');
+  // Only auto-switch scenarios when we have steps (custom empty = skip)
+  if (state.processConfig.steps.length) {
+    if (index === 3 && state.scenarioId === 'normal') {
+      applyScenario('peak', { silent: true });
+      logEvent('Pitch: Peak-Last für €-Impact');
+    }
+    if (index === 4) {
+      applyScenario('kapazitaet', { silent: true });
+      logEvent('Pitch: Kapazität+ zur Entlastung');
+    }
   }
 }
 
@@ -577,6 +1441,16 @@ function renderStationList() {
   list.innerHTML = '';
   const totalEur = eurStau();
 
+  if (!state.stations.length) {
+    list.appendChild(
+      el('div', {
+        className: 'bk-empty',
+        text: 'Keine Stationen — Linie im Baukasten konfigurieren.',
+      }),
+    );
+    return;
+  }
+
   for (const s of state.stations) {
     const level = stationLevel(s);
     const cls = level === 'idle' ? '' : level;
@@ -592,6 +1466,7 @@ function renderStationList() {
         el('span', { className: 'station-status', text: statusLabel(level === 'idle' ? 'ok' : level) }),
       ]),
       el('div', { className: 'station-meta' }, [
+        el('span', { html: `Typ: <strong>${typeLabel(s.type)}</strong>${s.booking ? ' · Buchung' : ''}` }),
         el('span', { html: `Kapazität: <strong>${s.capacity}</strong>` }),
         el('span', { html: `In Arbeit: <strong>${s.processing}</strong>` }),
         el('span', { html: `Warteschlange: <strong>${s.waiting}</strong>` }),
@@ -685,8 +1560,13 @@ function updateKpis() {
 
   const btnStart = document.getElementById('btn-start');
   const btnPause = document.getElementById('btn-pause');
+  const noSteps = !state.processConfig.steps.length;
   if (btnStart && btnPause) {
-    if (!state.running) {
+    if (noSteps) {
+      btnStart.textContent = 'Start';
+      btnStart.disabled = true;
+      btnPause.disabled = true;
+    } else if (!state.running) {
       btnStart.textContent = 'Start';
       btnStart.disabled = false;
       btnPause.disabled = true;
@@ -708,7 +1588,7 @@ function randBetween([a, b]) {
 
 function clearHighlights() {
   if (!state.elementRegistry) return;
-  for (const s of STATIONS_BASE) {
+  for (const s of state.stations) {
     const shape = state.elementRegistry.get(s.id);
     if (!shape) continue;
     const gfx = state.canvas.getGraphics(shape);
@@ -795,7 +1675,7 @@ function tryPromoteWaiting() {
     for (const o of waiting) {
       o.waiting = false;
       let service = randBetween(station.serviceMs);
-      if (station.id === 'Task_MaterialBuchung' && Math.random() < state.crisisChance) {
+      if (i === 0 && Math.random() < state.crisisChance) {
         service *= 2.5;
       }
       o.remainingMs = service;
@@ -804,6 +1684,7 @@ function tryPromoteWaiting() {
 }
 
 function spawnOrder() {
+  if (!state.stations.length) return;
   const id = state.nextOrderId++;
   const first = state.stations[0];
   const processing = [...state.orders.values()].filter(
@@ -849,7 +1730,7 @@ function advanceOrder(order) {
   order.stationIndex = next;
   order.waiting = mustWait;
   order.remainingMs = mustWait ? 0 : randBetween(station.serviceMs);
-  if (mustWait && station.id === 'Task_Vormontage') {
+  if (mustWait && station.capacity <= 2) {
     logEvent(
       `Engpass an <strong>${station.name}</strong>: Auftrag #${order.id} wartet (Queue &gt; Kapazität ${station.capacity})`,
     );
@@ -863,7 +1744,7 @@ function tick(dtMs) {
   state.spawnAccumMs += scaled;
   while (state.spawnAccumMs >= state.spawnIntervalMs) {
     state.spawnAccumMs -= state.spawnIntervalMs;
-    if (state.orders.size < 50) spawnOrder();
+    if (state.orders.size < 50 && state.stations.length) spawnOrder();
   }
 
   tryPromoteWaiting();
@@ -893,6 +1774,7 @@ function loop(ts) {
 }
 
 function startSimulation() {
+  if (!state.stations.length) return;
   state.running = true;
   state.paused = false;
   state.lastTs = 0;
@@ -915,55 +1797,62 @@ function resumeSimulation() {
 }
 
 function resetSimulation() {
-  state.running = false;
-  state.paused = false;
-  state.orders.clear();
-  state.activeOrders = 0;
-  state.completedOrders = 0;
-  state.nextOrderId = 1;
-  state.spawnAccumMs = 0;
-  state.lastTs = 0;
-  state.simElapsedMs = 0;
-  state.completedTimestamps = [];
-  state.leadTimeSumMs = 0;
-  state.leadTimeCount = 0;
-  if (state.rafId) {
-    cancelAnimationFrame(state.rafId);
-    state.rafId = 0;
-  }
+  hardResetSimState();
   applyScenario(state.scenarioId, { silent: true });
   recountStations();
-  clearHighlights();
   renderStationList();
   updateKpis();
   const box = document.getElementById('event-log');
   if (box) box.innerHTML = '';
   logEvent('Simulation <strong>zurückgesetzt</strong>');
+  syncVisuals();
 }
 
-async function loadDiagram() {
+async function ensureViewer() {
   const canvasEl = document.getElementById('canvas');
-  canvasEl.innerHTML = '';
+  if (!canvasEl) return null;
+  if (state.viewer) return state.viewer;
 
-  const viewer = new NavigatedViewer({
-    container: canvasEl,
-  });
+  canvasEl.innerHTML = '';
+  const viewer = new NavigatedViewer({ container: canvasEl });
   state.viewer = viewer;
   state.canvas = viewer.get('canvas');
   state.elementRegistry = viewer.get('elementRegistry');
   state.overlaysApi = viewer.get('overlays');
+  return viewer;
+}
 
-  const res = await fetch(BPMN_URL);
-  if (!res.ok) throw new Error(`BPMN-Datei nicht gefunden (HTTP ${res.status})`);
-  const xml = await res.text();
-
+async function reloadDiagramFromConfig() {
+  const viewer = await ensureViewer();
+  if (!viewer) return;
+  state.overlays.clear();
+  const xml = generateBpmnXml(state.processConfig);
   await viewer.importXML(xml);
+  state.canvas = viewer.get('canvas');
+  state.elementRegistry = viewer.get('elementRegistry');
+  state.overlaysApi = viewer.get('overlays');
   state.canvas.zoom('fit-viewport', 'auto');
-  logEvent('BPMN <strong>Logistik-Auftrag</strong> geladen');
   syncVisuals();
 }
 
+async function loadDiagram() {
+  await reloadDiagramFromConfig();
+  logEvent(
+    `BPMN für <strong>${escapeXml(state.processConfig.name)}</strong> generiert ` +
+      `(${state.processConfig.steps.length} Stationen)`,
+  );
+}
+
 async function main() {
+  const stored = loadStoredConfig();
+  if (stored) {
+    state.processConfig = stored;
+    state.eurPerOrderHour = stored.costPerOrderHour;
+  } else {
+    state.processConfig = cloneConfig(TEMPLATES.kfz);
+    state.eurPerOrderHour = state.processConfig.costPerOrderHour;
+  }
+
   const root = document.getElementById('app');
   buildShell(root);
   try {
