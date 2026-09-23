@@ -6,6 +6,10 @@
 **Sprache:** Deutsch.  
 **Zugang:** `demo` / `demo` · http://localhost:8080/
 
+> **Browser Control Tower (ohne Docker):** https://beko2210.github.io/logistik-camunda/  
+> **Executive-Pitch (10 Min, Deutsch):** [DEMO-PITCH.md](./DEMO-PITCH.md) — empfohlen für C-Level; dieses Runbook ergänzt optional Camunda Cockpit als Engine-Wahrheit.
+
+
 ---
 
 ## Vorbereitung (vor dem Meeting, 2 Min)

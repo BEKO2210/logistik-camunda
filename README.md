@@ -1,28 +1,50 @@
-# Logistik-Camunda – Community-Spike (Demo)
+# Logistik Camunda — Operations Control Tower (Enterprise Demo)
 
 > **Live Demo (Browser):** [https://beko2210.github.io/logistik-camunda/](https://beko2210.github.io/logistik-camunda/)  
-> Interaktive BPMN-Prozesskarte mit Buchungspunkten und Engpass-Simulation — ohne Docker.
+> Interaktive BPMN-Prozesskarte mit Executive-KPIs, Szenario-Presets, Pitch-Modus und €-Stau — ohne Docker.  
+> **Pitch-Skript (10 Min):** [DEMO-PITCH.md](./DEMO-PITCH.md)
 
+Kundenfähige Demo für Logistik-/Fertigungsprozesse: **Buchungspunkte** an jeder Station, sichtbare **Engpässe** (Warteschlangen / Auslastung) und eine klar gekennzeichnete **€-Impact-Kennzahl** (Demo-Annahme). Geeignet für C-Level- / Enterprise-Pitches — optional ergänzt um Camunda Cockpit als „Engine-Wahrheit“.
 
-Kunden-Demo: Ende-zu-Ende-Logistik-/Fertigungsprozess mit **Buchungspunkten** an jeder Station und sichtbaren **Engpässen** (offene Tasks / Warteschlangen) in Camunda Cockpit.
-
-- **Stack:** Camunda Platform **7** Community (Platform Run) – Cockpit, Tasklist, Admin, Welcome, REST  
-- **Lizenz:** Open Source (Camunda Community)  
-- **Cloud:** nicht nötig – alles lokal per Docker Compose  
-- **Sprache:** deutsche Prozess-Labels  
-
----
-
-## Voraussetzungen
-
-- Docker + Docker Compose (Docker Desktop unter macOS/Windows oder Engine unter Linux)
-- Optional: [Camunda Modeler](https://camunda.com/download/modeler/) oder [bpmn.io](https://demo.bpmn.io/) zum Bearbeiten der Modelle
-
-> **Hinweis Agenten-Box:** Auf der Entwicklungsbox ohne Docker wurden die Dateien vollständig bereitgestellt. Auf dem Rechner von Belkis: `./scripts/start.sh` bzw. `docker compose up -d`.
+| | |
+|---|---|
+| **Browser-Demo** | Vite + bpmn-js NavigatedViewer · GitHub Pages |
+| **Engine (optional)** | Camunda Platform **7** Community (Platform Run) — lokal per Docker |
+| **Lizenz** | Open Source (Camunda Community) |
+| **Cloud** | nicht nötig |
+| **Sprache** | Deutsch (UI + Pitch) |
 
 ---
 
-## Schnellstart
+## Was die Live-Demo zeigt
+
+1. **Prozesskarte** — Logistik-Auftrag End-to-End (Material → Vormontage → Produktion → QS → Versand)  
+2. **Executive KPI-Strip** — Durchsatz, WIP, Ø Durchlaufzeit, Engpass-Station, **€-Stau** (wartende Tokens × €/Auftrag/h, Default 8.500 € — Demo-Annahme)  
+3. **Szenarien** — Normalbetrieb · Peak-Last · Fehlteile-Krise · Kapazität+  
+4. **Pitch-Modus** — 5-Schritt-Overlay für den Vertriebs-/Executive-Walkthrough  
+5. **Stations-Board** — Kapazität, in Arbeit, Warteschlange, Auslastung %, €-Anteil am Stau  
+
+---
+
+## Schnellstart — Browser (empfohlen für Pitch)
+
+Öffnen: **https://beko2210.github.io/logistik-camunda/**
+
+Lokal:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Build: `npm run build` (Base-Path `/logistik-camunda/`, Ausgabe `web/dist`). Deploy via GitHub Actions → Pages.
+
+Ausführliches Pitch-Skript: **[DEMO-PITCH.md](./DEMO-PITCH.md)** · Cockpit-Storyline: **[DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md)**
+
+---
+
+## Schnellstart — Camunda Docker (Engine / Cockpit)
 
 ```bash
 cd logistik-camunda
@@ -55,27 +77,29 @@ Stoppen:
 docker compose down
 ```
 
+> **Hinweis Agenten-Box:** Ohne Docker lokal: Browser-Demo unter `web/` bzw. Live-URL. Auf dem Rechner von Belkis: `./scripts/start.sh` für die Engine.
+
 ---
 
 ## Prozessmodelle
 
 | Datei | Prozess-ID | Beschreibung |
 |---|---|---|
-| `processes/logistik-auftrag.bpmn` | `LogistikAuftrag` | Happy Path: Bestellung → Material-Buchung → Vormontage → Produktion → QS → Versand → Abgeschlossen; XOR Fehlteile / Engpass Vormontage / QS |
+| `processes/logistik-auftrag.bpmn` | `LogistikAuftrag` | Happy Path: Bestellung → Material-Buchung → Vormontage → Produktion → QS → Versand; XOR Fehlteile / Engpass Vormontage / QS |
 | `processes/station-buchung.bpmn` | `StationBuchung` | Kapazitäts-Buchung: „Buchung möglich“ vs. „Buchung nötig“ + Message-Event `KapazitaetFrei` |
 
-BPMN-Dateien unter `./processes` werden per Volume gemountet. Zusätzlich manuell deployen:
+BPMN unter `./processes` per Volume gemountet. Manuell deployen:
 
 ```bash
 ./scripts/deploy-process.sh
-# oder einzelne Datei:
+# oder:
 ./scripts/deploy-process.sh processes/logistik-auftrag.bpmn
 ```
 
 ### Modelle bearbeiten
 
 1. **Camunda Modeler** (Desktop): https://camunda.com/download/modeler/  
-2. **bpmn.io** (Browser): https://demo.bpmn.io/ – Datei öffnen, speichern, erneut deployen  
+2. **bpmn.io** (Browser): https://demo.bpmn.io/
 
 ---
 
@@ -91,8 +115,6 @@ BPMN-Dateien unter `./processes` werden per Volume gemountet. Zusätzlich manuel
 8. **Versand-Buchung**  
 9. **Abgeschlossen**  
 
-Variablen (Gateway-Bedingungen):
-
 | Variable | Typ | Wirkung |
 |---|---|---|
 | `fehlteile` | Boolean | `true` → Nachbestellung-Buchung |
@@ -102,27 +124,26 @@ Variablen (Gateway-Bedingungen):
 
 ---
 
-## Demo in 5–8 Klicks (Kunde)
+## Demo in 5–8 Klicks (Engine)
 
 1. Browser → http://localhost:8080/ → **Cockpit** → Login `demo` / `demo`  
 2. **Processes** → `Logistik-Auftrag (Ende-zu-Ende)` → Prozesskarte zeigen  
-3. Terminal: `./scripts/demo-instances.sh 8` (startet 8 Aufträge)  
-4. Zurück Cockpit → Prozess öffnen → **viele Token** auf erster Station (Material-Buchung)  
-5. **Tasklist** → alle „Material-/Lager-Buchung“ abschließen (Complete)  
-6. Cockpit neu laden → **Stau an Vormontage** = Engpass sichtbar  
-7. Optional: eine Instanz mit `engpassEntscheidung=warten` starten und Warteschlangen-Pfad zeigen  
-8. Happy Path einer Instanz bis **Abgeschlossen** durchklicken  
+3. Terminal: `./scripts/demo-instances.sh 8`  
+4. Cockpit → viele Token auf Material-Buchung  
+5. **Tasklist** → Material-Buchungen abschließen  
+6. Cockpit → **Stau an Vormontage**  
+7. Optional: Instanz mit `engpassEntscheidung=warten`  
+8. Happy Path bis **Abgeschlossen**  
 
-Ausführliche Storyline: [DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md)
+Details: [DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md) · Executive-Pitch (Browser): [DEMO-PITCH.md](./DEMO-PITCH.md)
 
 ---
 
 ## Engpass in Cockpit zeigen
 
 1. Cockpit → **Processes** → `LogistikAuftrag`  
-2. Diagramm: Zahlen an Aktivitäten = **laufende Activity Instances**  
+2. Diagramm: Zahlen an Aktivitäten = laufende Activity Instances  
 3. Viele offene Tasks an **Vormontage** = visueller Bottleneck  
-4. Tab **Incidents** / **Job Log** bei Bedarf; für diese Demo reichen Activity-Zähler + Tasklist-Filter  
 
 ---
 
@@ -147,39 +168,20 @@ logistik-camunda/
 │   ├── start.sh
 │   ├── deploy-process.sh
 │   └── demo-instances.sh
-├── web/                      # Browser-Demo (Vite + bpmn-js)
+├── web/                      # Operations Control Tower (Vite + bpmn-js)
 │   ├── public/
 │   └── src/
 ├── .github/workflows/pages.yml
 ├── README.md
-└── DEMO-RUNBOOK.md
+├── DEMO-PITCH.md             # 10-Minuten Executive-Pitch (Browser)
+└── DEMO-RUNBOOK.md           # Cockpit-/Engine-Storyline
 ```
 
 ---
 
-
-## Browser-Demo (GitHub Pages)
-
-Statische Website unter `web/` (Vite + bpmn-js Viewer):
-
-1. Öffnen: **https://beko2210.github.io/logistik-camunda/**
-2. **Demo starten** → Token fließen durch den Prozess
-3. Rechte Seite: Auslastung / Warteschlange je Station
-4. Überlastete Stationen (z. B. Vormontage) werden **amber/rot** hervorgehoben
-
-Lokal entwickeln:
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-Build: `npm run build` (Ausgabe `web/dist`, Base-Path `/logistik-camunda/`). Deployment erfolgt automatisch per GitHub Actions auf GitHub Pages.
-
----
 ## Hinweise
 
 - Community Edition, H2-Datenbank im Container-Volume (Demo-only).  
 - Repo: https://github.com/BEKO2210/logistik-camunda — Live-Demo via GitHub Pages.  
 - Image: `camunda/camunda-bpm-platform:run-7.22.0` (offen, ohne Cloud-Account).  
+- Keine erfundenen Kundenlogos, keine Partnerschaftsbehauptungen — Fokus auf Prozess, KPIs und Entscheidungsqualität.  
