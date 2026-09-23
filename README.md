@@ -18,12 +18,13 @@ Kundenfähige Demo für Logistik-/Fertigungsprozesse: **Buchungspunkte** an jede
 
 ## Was die Live-Demo zeigt
 
-1. **Prozess-Baukasten** — Stationen manuell einfügen, umordnen, löschen; Typ/Kapazität/Servicezeit/Buchungspflicht; Templates (KFZ/Montage, Wareneingang→QS, Buchung-first Lean, Leer); Export/Import JSON; Persistenz in `localStorage`  
-2. **Prozesskarte** — BPMN wird clientseitig aus der aktuellen Linie generiert (Start → UserTasks → Ende)  
+1. **Prozess-Baukasten** — Stationen manuell einfügen, umordnen, löschen; Typ/Kapazität/**Dauer in Sekunden**/Buchungspflicht/optional Skip-% (XOR); gleiche Stationsnamen erlaubt; Templates inkl. **Wareneingang → QS → Freigabe → Lagerzug**; Export/Import JSON; Persistenz in `localStorage`  
+2. **Prozesskarte** — BPMN wird clientseitig aus der aktuellen Linie generiert (Start → UserTasks → optional XOR-Skip → Ende)  
 3. **Executive KPI-Strip** — Durchsatz, WIP, Ø Durchlaufzeit, Engpass-Station, **€-Stau** (wartende Tokens × €/Auftrag/h — Demo-Annahme)  
 4. **Szenarien** — Normalbetrieb · Peak-Last · Fehlteile-Krise · Kapazität+ (wirken auf die aktuelle Config)  
 5. **Pitch-Modus** — 5-Schritt-Overlay für den Vertriebs-/Executive-Walkthrough  
 6. **Stations-Board** — Kapazität, in Arbeit, Warteschlange, Auslastung %, €-Anteil am Stau  
+7. **Buchungen** — lesbare Liste aktiver/freigegebener Stationsbuchungen (Station, Auftrag, Sim-Zeit, Status belegt/frei) + Badge „B“ auf der Karte  
 
 ---
 
@@ -50,10 +51,11 @@ Ausführliches Pitch-Skript: **[DEMO-PITCH.md](./DEMO-PITCH.md)** · Cockpit-Sto
 Jede Firma hat eine andere Fließrichtung (Wareneneingang→QS zuerst, Buchung zuerst, Schritte überspringen). Im Live-Control-Tower:
 
 1. Rechts **Prozess-Baukasten** öffnen (oder Toolbar-Button).  
-2. Template wählen **oder** „Schritt einfügen“ (Typ + Name, Einfügen nach Auswahl).  
-3. Mit ↑↓ umordnen, inline editieren (Name, Typ, Kapazität, Servicezeit-Range, Buchungspflicht), löschen.  
-4. **Übernehmen** → BPMN + Simulation werden neu aufgebaut.  
-5. **Export JSON / Import JSON** für Kundenprofile; aktivierte Config liegt unter `localStorage`-Key `logistik-process-config`.
+2. Template wählen (z. B. **Wareneingang → QS → Freigabe → Lagerzug**) **oder** „Schritt einfügen“ (Typ + Name, Einfügen nach Auswahl).  
+3. Mit ↑↓ umordnen, inline editieren (Name, Typ, Kapazität, **Dauer min–max in Sekunden**, Buchungspflicht, optional **Skip-%** für QS/optionale Schritte), löschen. Gleiche Namen (z. B. zwei „Einlagerung“) sind erlaubt — IDs bleiben eindeutig.  
+4. **Übernehmen** → BPMN + Simulation werden neu aufgebaut (bei Skip-% erscheint ein XOR-Gateway).  
+5. Simulation starten → Panel **Buchungen** zeigt belegt/frei mit Station, Auftrag und Sim-Zeit.  
+6. **Export JSON / Import JSON** für Kundenprofile; aktivierte Config liegt unter `localStorage`-Key `logistik-process-config`.
 
 So lässt sich im Meeting die Kundenlinie in ca. **2 Minuten** nachbauen — ohne fest verdrahteten One-Size-Prozess.
 

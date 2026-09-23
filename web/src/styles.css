@@ -1041,3 +1041,99 @@ body {
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+
+/* ——— Buchungen Panel ——— */
+.booking-panel {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.booking-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.booking-row {
+  display: grid;
+  grid-template-columns: 52px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.booking-row.belegt {
+  border-color: #f1707b;
+  background: var(--danger-bg);
+}
+
+.booking-row.frei {
+  border-color: #9fd89f;
+  background: #f8fff8;
+}
+
+.booking-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.booking-row.belegt .booking-status { color: var(--danger); }
+.booking-row.frei .booking-status { color: var(--ok); }
+
+.booking-station {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.booking-order {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.booking-time {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--text-muted);
+}
+
+.booking-empty-line,
+.bk-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.booking-badge {
+  background: #5c2d91;
+  color: #fff;
+  border-radius: 8px;
+  min-width: 28px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  font-variant-numeric: tabular-nums;
+}

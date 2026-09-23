@@ -16,7 +16,7 @@
 2. Zweiten Tab optional: Cockpit `http://localhost:8080/` (falls Docker läuft).  
 3. Seite einmal laden — BPMN sollte sichtbar sein.  
 4. €/Auftrag/h auf **8.500** lassen (oder Kundennähe anpassen und als Annahme nennen).  
-5. Optional **Prozess-Baukasten** vorbereiten: Template passend zum Kunden (KFZ/Montage, Wareneingang→QS, Buchung-first) oder „Leer“ + 3–4 Schritte — Selling Point: *„Ihre Linie in 2 Minuten nachbauen.“*
+5. Optional **Prozess-Baukasten** vorbereiten: Template passend zum Kunden (KFZ/Montage, Wareneingang→QS, **Wareneingang → QS → Freigabe → Lagerzug**, Buchung-first) oder „Leer“ + 3–4 Schritte — Selling Point: *„Ihre Linie in 2 Minuten nachbauen.“* Dauer in **Sekunden**, Buchungen als Liste sichtbar.
 
 ---
 
@@ -75,11 +75,11 @@ Details: [DEMO-RUNBOOK.md](./DEMO-RUNBOOK.md)
 
 ## Minute 7–8 · Prozess-Baukasten (Wow-Moment)
 
-> „Kein One-Size-Prozess: Sie stecken Ihre Stationen als Bauschritte — Name, Typ, Kapazität, Servicezeit, Buchung ja/nein. Diagramm und Simulation folgen sofort.“
+> „Kein One-Size-Prozess: Sie stecken Ihre Stationen als Bauschritte — Name, Typ, Kapazität, Dauer in Sekunden, Buchung ja/nein, optional QS-Skip. Diagramm und Simulation folgen sofort.“
 
 1. Rechts **Prozess-Baukasten** zeigen.  
-2. Template wechseln (z. B. Wareneingang→QS) **oder** einen Schritt zwischen zwei Stationen einfügen → **Übernehmen**.  
-3. Kurz starten: Tokens laufen auf *ihrer* Linie.  
+2. Template **Wareneingang → QS → Freigabe → Lagerzug** laden (zwei Einlagerungen mit gleichem Namen) → **Übernehmen**.  
+3. Start: Tokens laufen; Panel **Buchungen** zeigt belegt/frei.  
 4. Optional Export JSON: „Das ist Ihr Kundenprofil für den nächsten Termin.“
 
 Dann weiter mit Close — oder Cockpit, wenn Zeit.

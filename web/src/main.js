@@ -21,17 +21,53 @@ const STEP_TYPES = [
 ];
 
 const TYPE_DEFAULTS = {
-  buchung: { capacity: 4, serviceMs: [350, 800], booking: true },
-  prozess: { capacity: 2, serviceMs: [800, 1500], booking: true },
-  qs: { capacity: 2, serviceMs: [500, 1200], booking: true },
-  lager: { capacity: 4, serviceMs: [400, 900], booking: true },
-  versand: { capacity: 4, serviceMs: [350, 800], booking: true },
-  custom: { capacity: 3, serviceMs: [500, 1000], booking: false },
+  buchung: { capacity: 4, serviceSec: [1, 3], booking: true, skipPct: 0 },
+  prozess: { capacity: 2, serviceSec: [2, 5], booking: true, skipPct: 0 },
+  qs: { capacity: 2, serviceSec: [2, 6], booking: true, skipPct: 0 },
+  lager: { capacity: 4, serviceSec: [2, 4], booking: true, skipPct: 0 },
+  versand: { capacity: 4, serviceSec: [1, 3], booking: true, skipPct: 0 },
+  custom: { capacity: 3, serviceSec: [1, 4], booking: false, skipPct: 0 },
 };
 
 function stepDefaults(type) {
   const d = TYPE_DEFAULTS[type] || TYPE_DEFAULTS.custom;
-  return { capacity: d.capacity, serviceMs: [...d.serviceMs], booking: d.booking };
+  return {
+    capacity: d.capacity,
+    serviceSec: [...d.serviceSec],
+    booking: d.booking,
+    skipPct: d.skipPct || 0,
+  };
+}
+
+function clampSec(n, fallback = 1) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return fallback;
+  return Math.round(v * 10) / 10;
+}
+
+function normalizeServiceSec(partial, fallback) {
+  if (Array.isArray(partial?.serviceSec) && partial.serviceSec.length >= 2) {
+    return [clampSec(partial.serviceSec[0], fallback[0]), clampSec(partial.serviceSec[1], fallback[1])];
+  }
+  if (Array.isArray(partial?.serviceMs) && partial.serviceMs.length >= 2) {
+    return [
+      clampSec((Number(partial.serviceMs[0]) || 1000) / 1000, fallback[0]),
+      clampSec((Number(partial.serviceMs[1]) || 1000) / 1000, fallback[1]),
+    ];
+  }
+  return [...fallback];
+}
+
+function serviceMsFromSec(sec) {
+  const a = Math.max(0.1, Number(sec?.[0]) || 0.1);
+  const b = Math.max(0.1, Number(sec?.[1]) || a);
+  return [Math.round(a * 1000), Math.round(b * 1000)];
+}
+
+function sanitizeStepId(raw, fallbackPrefix = 's') {
+  let id = String(raw || '').replace(/[^A-Za-z0-9_.-]/g, '_');
+  if (!id || !/^[A-Za-z_]/.test(id)) id = `${fallbackPrefix}_${id || uid('x')}`;
+  return id;
 }
 
 function uid(prefix = 's') {
@@ -41,15 +77,17 @@ function uid(prefix = 's') {
 function makeStep(partial) {
   const type = partial.type || 'custom';
   const defaults = stepDefaults(type);
+  const serviceSec = normalizeServiceSec(partial, defaults.serviceSec);
+  const skipRaw = Number(partial.skipPct);
   return {
-    id: partial.id || uid('s'),
+    id: sanitizeStepId(partial.id || uid('s')),
     name: partial.name || 'Neuer Schritt',
     type,
     capacity: partial.capacity ?? defaults.capacity,
-    serviceMs: Array.isArray(partial.serviceMs)
-      ? [...partial.serviceMs]
-      : [...defaults.serviceMs],
+    serviceSec,
+    serviceMs: serviceMsFromSec(serviceSec),
     booking: partial.booking ?? defaults.booking,
+    skipPct: Number.isFinite(skipRaw) ? Math.max(0, Math.min(100, skipRaw)) : defaults.skipPct,
   };
 }
 
@@ -65,7 +103,7 @@ const TEMPLATES = {
         name: 'Material-/Lager-Buchung',
         type: 'lager',
         capacity: 4,
-        serviceMs: [400, 900],
+        serviceSec: [1, 3],
         booking: true,
       }),
       makeStep({
@@ -73,7 +111,7 @@ const TEMPLATES = {
         name: 'Vormontage',
         type: 'prozess',
         capacity: 2,
-        serviceMs: [900, 1600],
+        serviceSec: [2, 5],
         booking: true,
       }),
       makeStep({
@@ -81,7 +119,7 @@ const TEMPLATES = {
         name: 'Produktion / Montage',
         type: 'prozess',
         capacity: 3,
-        serviceMs: [700, 1300],
+        serviceSec: [2, 4],
         booking: true,
       }),
       makeStep({
@@ -89,7 +127,7 @@ const TEMPLATES = {
         name: 'QS / Freigabe',
         type: 'qs',
         capacity: 3,
-        serviceMs: [500, 1000],
+        serviceSec: [1, 3],
         booking: true,
       }),
       makeStep({
@@ -97,7 +135,7 @@ const TEMPLATES = {
         name: 'Versand-Buchung',
         type: 'versand',
         capacity: 4,
-        serviceMs: [350, 800],
+        serviceSec: [1, 2],
         booking: true,
       }),
     ],
@@ -112,7 +150,7 @@ const TEMPLATES = {
         name: 'Wareneingang',
         type: 'lager',
         capacity: 5,
-        serviceMs: [300, 700],
+        serviceSec: [1, 2],
         booking: true,
       }),
       makeStep({
@@ -120,7 +158,7 @@ const TEMPLATES = {
         name: 'QS Eingang',
         type: 'qs',
         capacity: 2,
-        serviceMs: [600, 1400],
+        serviceSec: [2, 5],
         booking: true,
       }),
       makeStep({
@@ -128,7 +166,7 @@ const TEMPLATES = {
         name: 'Bestandsbuchung',
         type: 'buchung',
         capacity: 3,
-        serviceMs: [400, 900],
+        serviceSec: [1, 3],
         booking: true,
       }),
       makeStep({
@@ -136,7 +174,7 @@ const TEMPLATES = {
         name: 'Einlagern',
         type: 'lager',
         capacity: 4,
-        serviceMs: [500, 1000],
+        serviceSec: [2, 4],
         booking: true,
       }),
       makeStep({
@@ -144,8 +182,64 @@ const TEMPLATES = {
         name: 'Bereitstellung',
         type: 'prozess',
         capacity: 3,
-        serviceMs: [450, 900],
+        serviceSec: [1, 3],
         booking: false,
+      }),
+    ],
+  },
+  we_qs_freigabe: {
+    id: 'we_qs_freigabe',
+    name: 'Wareneingang → QS → Freigabe → Lagerzug',
+    costPerOrderHour: 7800,
+    steps: [
+      makeStep({
+        id: 's_we_recv',
+        name: 'Wareneingang',
+        type: 'lager',
+        capacity: 5,
+        serviceSec: [2, 4],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_einlag_1',
+        name: 'Einlagerung',
+        type: 'lager',
+        capacity: 4,
+        serviceSec: [2, 5],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_qs_parts',
+        name: 'QS (wichtige Teile)',
+        type: 'qs',
+        capacity: 2,
+        serviceSec: [3, 8],
+        booking: true,
+        skipPct: 40,
+      }),
+      makeStep({
+        id: 's_freigabe',
+        name: 'Freigabe',
+        type: 'prozess',
+        capacity: 3,
+        serviceSec: [1, 3],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_einlag_2',
+        name: 'Einlagerung',
+        type: 'lager',
+        capacity: 4,
+        serviceSec: [2, 4],
+        booking: true,
+      }),
+      makeStep({
+        id: 's_lagerzug',
+        name: 'Lagerzug (Auftrag)',
+        type: 'buchung',
+        capacity: 3,
+        serviceSec: [2, 5],
+        booking: true,
       }),
     ],
   },
@@ -159,7 +253,7 @@ const TEMPLATES = {
         name: 'Auftrag buchen',
         type: 'buchung',
         capacity: 3,
-        serviceMs: [250, 550],
+        serviceSec: [1, 2],
         booking: true,
       }),
       makeStep({
@@ -167,7 +261,7 @@ const TEMPLATES = {
         name: 'Kommissionierung',
         type: 'lager',
         capacity: 4,
-        serviceMs: [500, 1100],
+        serviceSec: [2, 4],
         booking: true,
       }),
       makeStep({
@@ -175,7 +269,7 @@ const TEMPLATES = {
         name: 'Packen',
         type: 'prozess',
         capacity: 3,
-        serviceMs: [400, 800],
+        serviceSec: [1, 3],
         booking: false,
       }),
       makeStep({
@@ -183,7 +277,7 @@ const TEMPLATES = {
         name: 'Versand freigeben',
         type: 'versand',
         capacity: 4,
-        serviceMs: [300, 700],
+        serviceSec: [1, 2],
         booking: true,
       }),
     ],
@@ -200,11 +294,25 @@ function cloneConfig(cfg) {
   return JSON.parse(JSON.stringify(cfg));
 }
 
+function ensureUniqueStepIds(steps) {
+  const seen = new Set();
+  return steps.map((s, i) => {
+    let id = sanitizeStepId(s.id, `s${i}`);
+    if (seen.has(id)) {
+      let n = 2;
+      while (seen.has(`${id}_${n}`)) n += 1;
+      id = `${id}_${n}`;
+    }
+    seen.add(id);
+    return { ...s, id };
+  });
+}
+
 function normalizeConfig(raw) {
   if (!raw || typeof raw !== 'object') return cloneConfig(TEMPLATES.kfz);
-  const steps = Array.isArray(raw.steps)
-    ? raw.steps.map((s) => makeStep(s || {}))
-    : [];
+  const steps = ensureUniqueStepIds(
+    Array.isArray(raw.steps) ? raw.steps.map((s) => makeStep(s || {})) : [],
+  );
   return {
     id: String(raw.id || 'custom'),
     name: String(raw.name || 'Mein Werk'),
@@ -336,6 +444,8 @@ const state = {
   lastTs: 0,
   rafId: 0,
   maxLog: 50,
+  maxBookings: 80,
+  bookings: /** @type {{id:string, stationId:string, stationName:string, orderId:number, simTimeMs:number, status:'belegt'|'frei', freedAtMs?:number}[]} */ ([]),
   pitchActive: false,
   pitchStep: 0,
   pitchTimer: 0,
@@ -350,37 +460,146 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
-/** Generate simple linear BPMN 2.0 XML from config.steps */
+/** Generate BPMN 2.0 XML from config.steps (linear + XOR skip for optional steps) */
 function generateBpmnXml(config) {
   const steps = config.steps || [];
   const processName = escapeXml(config.name || 'Logistik-Auftrag');
   const taskW = 120;
   const taskH = 80;
-  const gap = 60;
-  const startX = 80;
-  const y = 120;
+  const gw = 50;
+  const gap = 48;
+  const startX = 72;
+  const y = 110;
+  const ySkip = 250;
   const startW = 36;
   const endW = 36;
 
   const nodes = [];
+  const flows = [];
+  let flowN = 0;
   let x = startX;
-  nodes.push({ kind: 'start', id: 'Start_Bestellung', name: 'Bestellung', x, y: y + 22, w: startW, h: startW });
+
+  const startNode = {
+    kind: 'start',
+    id: 'Start_Bestellung',
+    name: 'Bestellung',
+    x,
+    y: y + 22,
+    w: startW,
+    h: startW,
+  };
+  nodes.push(startNode);
+  let prev = startNode;
   x += startW + gap;
 
   for (const step of steps) {
-    nodes.push({
-      kind: 'task',
-      id: step.id,
-      name: step.name,
-      x,
-      y,
-      w: taskW,
-      h: taskH,
-    });
-    x += taskW + gap;
+    const skip = Math.max(0, Math.min(100, Number(step.skipPct) || 0));
+    if (skip > 0) {
+      const split = {
+        kind: 'gateway',
+        id: `GwSplit_${step.id}`,
+        name: step.type === 'qs' ? 'QS nötig?' : 'Optional?',
+        x,
+        y: y + 15,
+        w: gw,
+        h: gw,
+      };
+      nodes.push(split);
+      flows.push({
+        id: `Flow_${flowN++}`,
+        source: prev.id,
+        target: split.id,
+        name: '',
+        waypoints: [
+          { x: prev.x + prev.w, y: prev.y + prev.h / 2 },
+          { x: split.x, y: split.y + split.h / 2 },
+        ],
+      });
+      x += gw + gap;
+
+      const task = {
+        kind: 'task',
+        id: step.id,
+        name: step.name,
+        x,
+        y,
+        w: taskW,
+        h: taskH,
+      };
+      nodes.push(task);
+      flows.push({
+        id: `Flow_${flowN++}`,
+        source: split.id,
+        target: task.id,
+        name: `ja ${100 - skip}%`,
+        waypoints: [
+          { x: split.x + split.w, y: split.y + split.h / 2 },
+          { x: task.x, y: task.y + task.h / 2 },
+        ],
+      });
+      x += taskW + gap;
+
+      const join = {
+        kind: 'gateway',
+        id: `GwJoin_${step.id}`,
+        name: '',
+        x,
+        y: y + 15,
+        w: gw,
+        h: gw,
+      };
+      nodes.push(join);
+      flows.push({
+        id: `Flow_${flowN++}`,
+        source: task.id,
+        target: join.id,
+        name: '',
+        waypoints: [
+          { x: task.x + task.w, y: task.y + task.h / 2 },
+          { x: join.x, y: join.y + join.h / 2 },
+        ],
+      });
+      flows.push({
+        id: `Flow_${flowN++}`,
+        source: split.id,
+        target: join.id,
+        name: `nein ${skip}%`,
+        waypoints: [
+          { x: split.x + split.w / 2, y: split.y + split.h },
+          { x: split.x + split.w / 2, y: ySkip },
+          { x: join.x + join.w / 2, y: ySkip },
+          { x: join.x + join.w / 2, y: join.y + join.h },
+        ],
+      });
+      prev = join;
+      x += gw + gap;
+    } else {
+      const task = {
+        kind: 'task',
+        id: step.id,
+        name: step.name,
+        x,
+        y,
+        w: taskW,
+        h: taskH,
+      };
+      nodes.push(task);
+      flows.push({
+        id: `Flow_${flowN++}`,
+        source: prev.id,
+        target: task.id,
+        name: '',
+        waypoints: [
+          { x: prev.x + prev.w, y: prev.y + prev.h / 2 },
+          { x: task.x, y: task.y + task.h / 2 },
+        ],
+      });
+      prev = task;
+      x += taskW + gap;
+    }
   }
 
-  nodes.push({
+  const endNode = {
     kind: 'end',
     id: 'End_Abgeschlossen',
     name: 'Abgeschlossen',
@@ -388,47 +607,68 @@ function generateBpmnXml(config) {
     y: y + 22,
     w: endW,
     h: endW,
+  };
+  nodes.push(endNode);
+  flows.push({
+    id: `Flow_${flowN++}`,
+    source: prev.id,
+    target: endNode.id,
+    name: '',
+    waypoints: [
+      { x: prev.x + prev.w, y: prev.y + prev.h / 2 },
+      { x: endNode.x, y: endNode.y + endNode.h / 2 },
+    ],
   });
 
-  const flows = [];
-  for (let i = 0; i < nodes.length - 1; i++) {
-    flows.push({
-      id: `Flow_${i}`,
-      source: nodes[i].id,
-      target: nodes[i + 1].id,
-    });
+  const incoming = new Map();
+  const outgoing = new Map();
+  for (const f of flows) {
+    if (!outgoing.has(f.source)) outgoing.set(f.source, []);
+    outgoing.get(f.source).push(f.id);
+    if (!incoming.has(f.target)) incoming.set(f.target, []);
+    incoming.get(f.target).push(f.id);
   }
 
   const processParts = [];
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
-    const incoming = i > 0 ? flows[i - 1].id : null;
-    const outgoing = i < flows.length ? flows[i].id : null;
+  for (const n of nodes) {
+    const ins = incoming.get(n.id) || [];
+    const outs = outgoing.get(n.id) || [];
+    const inXml = ins.map((id) => `      <bpmn:incoming>${id}</bpmn:incoming>`).join('\n');
+    const outXml = outs.map((id) => `      <bpmn:outgoing>${id}</bpmn:outgoing>`).join('\n');
     if (n.kind === 'start') {
       processParts.push(
         `    <bpmn:startEvent id="${n.id}" name="${escapeXml(n.name)}">\n` +
-          (outgoing ? `      <bpmn:outgoing>${outgoing}</bpmn:outgoing>\n` : '') +
+          (outXml ? `${outXml}\n` : '') +
           `    </bpmn:startEvent>`,
       );
     } else if (n.kind === 'end') {
       processParts.push(
         `    <bpmn:endEvent id="${n.id}" name="${escapeXml(n.name)}">\n` +
-          (incoming ? `      <bpmn:incoming>${incoming}</bpmn:incoming>\n` : '') +
+          (inXml ? `${inXml}\n` : '') +
           `    </bpmn:endEvent>`,
+      );
+    } else if (n.kind === 'gateway') {
+      const nameAttr = n.name ? ` name="${escapeXml(n.name)}"` : '';
+      processParts.push(
+        `    <bpmn:exclusiveGateway id="${escapeXml(n.id)}"${nameAttr}>\n` +
+          (inXml ? `${inXml}\n` : '') +
+          (outXml ? `${outXml}\n` : '') +
+          `    </bpmn:exclusiveGateway>`,
       );
     } else {
       processParts.push(
         `    <bpmn:userTask id="${escapeXml(n.id)}" name="${escapeXml(n.name)}">\n` +
-          (incoming ? `      <bpmn:incoming>${incoming}</bpmn:incoming>\n` : '') +
-          (outgoing ? `      <bpmn:outgoing>${outgoing}</bpmn:outgoing>\n` : '') +
+          (inXml ? `${inXml}\n` : '') +
+          (outXml ? `${outXml}\n` : '') +
           `    </bpmn:userTask>`,
       );
     }
   }
 
   for (const f of flows) {
+    const nameAttr = f.name ? ` name="${escapeXml(f.name)}"` : '';
     processParts.push(
-      `    <bpmn:sequenceFlow id="${f.id}" sourceRef="${escapeXml(f.source)}" targetRef="${escapeXml(f.target)}" />`,
+      `    <bpmn:sequenceFlow id="${f.id}"${nameAttr} sourceRef="${escapeXml(f.source)}" targetRef="${escapeXml(f.target)}" />`,
     );
   }
 
@@ -442,18 +682,13 @@ function generateBpmnXml(config) {
   }
 
   const diEdges = [];
-  for (let i = 0; i < flows.length; i++) {
-    const f = flows[i];
-    const src = nodes[i];
-    const tgt = nodes[i + 1];
-    const x1 = src.x + src.w;
-    const y1 = src.y + src.h / 2;
-    const x2 = tgt.x;
-    const y2 = tgt.y + tgt.h / 2;
+  for (const f of flows) {
+    const wps = (f.waypoints || [])
+      .map((wp) => `        <di:waypoint x="${Math.round(wp.x)}" y="${Math.round(wp.y)}" />`)
+      .join('\n');
     diEdges.push(
       `      <bpmndi:BPMNEdge id="${f.id}_di" bpmnElement="${f.id}">\n` +
-        `        <di:waypoint x="${x1}" y="${y1}" />\n` +
-        `        <di:waypoint x="${x2}" y="${y2}" />\n` +
+        `${wps}\n` +
         `      </bpmndi:BPMNEdge>`,
     );
   }
@@ -467,7 +702,7 @@ function generateBpmnXml(config) {
     `                  id="Definitions_Baukasten"\n` +
     `                  targetNamespace="http://novaforge.de/logistik"\n` +
     `                  exporter="Logistik Control Tower Baukasten"\n` +
-    `                  exporterVersion="1.0.0">\n` +
+    `                  exporterVersion="1.1.0">\n` +
     `  <bpmn:process id="LogistikAuftragDynamic" name="${processName}" isExecutable="true">\n` +
     processParts.join('\n') +
     `\n  </bpmn:process>\n` +
@@ -496,19 +731,25 @@ function findNarrowestIndex(stations) {
 
 function buildStationsFromConfig(config, scenarioId) {
   const sc = SCENARIOS[scenarioId] || SCENARIOS.normal;
-  const stations = (config.steps || []).map((step) => ({
-    id: step.id,
-    name: step.name,
-    type: step.type,
-    booking: !!step.booking,
-    baseCapacity: Math.max(1, Number(step.capacity) || 1),
-    capacity: Math.max(1, Number(step.capacity) || 1),
-    baseServiceMs: [...(step.serviceMs || [500, 1000])],
-    serviceMs: [...(step.serviceMs || [500, 1000])],
-    queue: 0,
-    processing: 0,
-    waiting: 0,
-  }));
+  const stations = (config.steps || []).map((step) => {
+    const sec = normalizeServiceSec(step, [1, 3]);
+    const ms = serviceMsFromSec(sec);
+    return {
+      id: step.id,
+      name: step.name,
+      type: step.type,
+      booking: !!step.booking,
+      skipPct: Math.max(0, Math.min(100, Number(step.skipPct) || 0)),
+      baseCapacity: Math.max(1, Number(step.capacity) || 1),
+      capacity: Math.max(1, Number(step.capacity) || 1),
+      baseServiceMs: [...ms],
+      serviceMs: [...ms],
+      queue: 0,
+      processing: 0,
+      waiting: 0,
+      bookedOrderIds: /** @type {Set<number>} */ (new Set()),
+    };
+  });
 
   if (stations.length > 0) {
     const mult = sc.firstServiceMult || 1;
@@ -595,7 +836,7 @@ function buildShell(root) {
         el('h1', { text: 'Operations Control Tower — Logistik End-to-End' }),
         el('p', {
           text:
-            'Baukasten: Stationen einfügen · umordnen · löschen · Templates · Export/Import',
+            'Baukasten: Dauer in Sekunden · Buchungen sichtbar · gleiche Stationsnamen möglich',
         }),
       ]),
       el('div', { className: 'toolbar-actions', id: 'toolbar-actions' }, [
@@ -679,7 +920,7 @@ function buildShell(root) {
       el('div', { id: 'canvas' }, [el('div', { className: 'loading', text: 'BPMN wird geladen …' })]),
       el('div', {
         className: 'canvas-overlay-hint',
-        text: 'Badges = Warteschlange · Farbe = Auslastung vs. Kapazität · Linie aus Baukasten',
+        text: 'Badges = Queue · B = Buchung belegt · Linie aus Baukasten',
       }),
       el('div', { className: 'pitch-overlay', id: 'pitch-overlay', hidden: 'true' }),
     ]),
@@ -764,6 +1005,15 @@ function buildShell(root) {
         el('div', { className: 'station-list', id: 'station-list' }),
       ]),
     ]),
+    el('section', { className: 'card', style: 'margin-top:12px', id: 'bookings-card' }, [
+      el('div', { className: 'card-header' }, [
+        el('h2', { text: 'Buchungen' }),
+        el('span', { className: 'baukasten-hint', id: 'bookings-count', text: '0 aktiv' }),
+      ]),
+      el('div', { className: 'card-body card-body-tight' }, [
+        el('div', { className: 'booking-panel', id: 'booking-panel' }),
+      ]),
+    ]),
     el('section', { className: 'card', style: 'margin-top:12px' }, [
       el('div', { className: 'card-header' }, [el('h2', { text: 'Legende & Annahmen' })]),
       el('div', { className: 'card-body' }, [
@@ -807,6 +1057,7 @@ function buildShell(root) {
   renderTemplateButtons();
   renderBaukastenSteps();
   renderStationList();
+  renderBookingPanel();
   wireControls();
   updateKpis();
 }
@@ -968,8 +1219,10 @@ function renderBaukastenSteps() {
       const d = stepDefaults(newType);
       draft.steps[index].type = newType;
       draft.steps[index].capacity = d.capacity;
-      draft.steps[index].serviceMs = [...d.serviceMs];
+      draft.steps[index].serviceSec = [...d.serviceSec];
+      draft.steps[index].serviceMs = serviceMsFromSec(d.serviceSec);
       draft.steps[index].booking = d.booking;
+      draft.steps[index].skipPct = d.skipPct;
       draft.id = 'custom';
       renderBaukastenSteps();
     });
@@ -991,28 +1244,37 @@ function renderBaukastenSteps() {
       ),
     );
 
+    const sec = step.serviceSec || normalizeServiceSec(step, [1, 3]);
     fields.appendChild(
       fieldRow(
-        'Service ms (min–max)',
+        'Dauer (Sek.) min–max',
         el('div', { className: 'bk-range' }, [
           el('input', {
             type: 'number',
-            min: '50',
-            step: '50',
-            value: String(step.serviceMs[0]),
+            min: '0.1',
+            step: '0.5',
+            title: 'Min. Sekunden',
+            value: String(sec[0]),
             onInput: (e) => {
-              draft.steps[index].serviceMs[0] = Math.max(50, Number(e.target.value) || 50);
+              const v = clampSec(e.target.value, 0.1);
+              draft.steps[index].serviceSec = draft.steps[index].serviceSec || [...sec];
+              draft.steps[index].serviceSec[0] = v;
+              draft.steps[index].serviceMs = serviceMsFromSec(draft.steps[index].serviceSec);
               draft.id = 'custom';
             },
           }),
           el('span', { text: '–' }),
           el('input', {
             type: 'number',
-            min: '50',
-            step: '50',
-            value: String(step.serviceMs[1]),
+            min: '0.1',
+            step: '0.5',
+            title: 'Max. Sekunden',
+            value: String(sec[1]),
             onInput: (e) => {
-              draft.steps[index].serviceMs[1] = Math.max(50, Number(e.target.value) || 50);
+              const v = clampSec(e.target.value, 0.1);
+              draft.steps[index].serviceSec = draft.steps[index].serviceSec || [...sec];
+              draft.steps[index].serviceSec[1] = v;
+              draft.steps[index].serviceMs = serviceMsFromSec(draft.steps[index].serviceSec);
               draft.id = 'custom';
             },
           }),
@@ -1032,6 +1294,24 @@ function renderBaukastenSteps() {
       el('span', { text: 'Buchungspflicht' }),
     ]);
     fields.appendChild(bookLabel);
+
+    fields.appendChild(
+      fieldRow(
+        step.type === 'qs' ? 'QS nötig? Skip % (nein)' : 'Überspringen %',
+        el('input', {
+          type: 'number',
+          min: '0',
+          max: '100',
+          step: '5',
+          value: String(step.skipPct || 0),
+          title: 'Anteil der Aufträge, die diesen Schritt überspringen (0 = nie, 100 = immer)',
+          onInput: (e) => {
+            draft.steps[index].skipPct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+            draft.id = 'custom';
+          },
+        }),
+      ),
+    );
 
     row.appendChild(fields);
     row.addEventListener('click', () => {
@@ -1093,13 +1373,16 @@ async function applyDraftConfig() {
   const nameInput = document.getElementById('bk-name');
   if (nameInput) draft.name = nameInput.value.trim() || draft.name || 'Mein Werk';
 
-  // Normalize service ranges
+  // Normalize service ranges (seconds → ms for simulation)
   for (const s of draft.steps) {
-    let a = Math.max(50, Number(s.serviceMs[0]) || 50);
-    let b = Math.max(50, Number(s.serviceMs[1]) || 50);
+    const sec = normalizeServiceSec(s, [1, 3]);
+    let a = sec[0];
+    let b = sec[1];
     if (b < a) [a, b] = [b, a];
-    s.serviceMs = [a, b];
+    s.serviceSec = [a, b];
+    s.serviceMs = serviceMsFromSec(s.serviceSec);
     s.capacity = Math.max(1, Number(s.capacity) || 1);
+    s.skipPct = Math.max(0, Math.min(100, Number(s.skipPct) || 0));
   }
 
   state.processConfig = normalizeConfig(draft);
@@ -1149,11 +1432,16 @@ function hardResetSimState() {
   state.completedTimestamps = [];
   state.leadTimeSumMs = 0;
   state.leadTimeCount = 0;
+  state.bookings = [];
+  for (const s of state.stations) {
+    if (s.bookedOrderIds) s.bookedOrderIds.clear();
+  }
   if (state.rafId) {
     cancelAnimationFrame(state.rafId);
     state.rafId = 0;
   }
   clearHighlights();
+  renderBookingPanel();
 }
 
 function exportConfigJson() {
@@ -1435,6 +1723,129 @@ function utilizationPct(station) {
   return Math.min(999, Math.round((station.queue / station.capacity) * 100));
 }
 
+
+function formatSimClock(ms) {
+  const totalSec = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function recordStationBooking(station, orderId) {
+  if (!station?.booking) return;
+  if (station.bookedOrderIds?.has(orderId)) return;
+  if (!station.bookedOrderIds) station.bookedOrderIds = new Set();
+  station.bookedOrderIds.add(orderId);
+  const entry = {
+    id: uid('bk'),
+    stationId: station.id,
+    stationName: station.name,
+    orderId,
+    simTimeMs: state.simElapsedMs,
+    status: 'belegt',
+  };
+  state.bookings.unshift(entry);
+  if (state.bookings.length > state.maxBookings) {
+    state.bookings.length = state.maxBookings;
+  }
+  logEvent(
+    `Buchung <strong>belegt</strong>: ${escapeXml(station.name)} · Auftrag #${orderId} · ${formatSimClock(state.simElapsedMs)}`,
+  );
+  renderBookingPanel();
+}
+
+function releaseStationBooking(station, orderId) {
+  if (!station?.booking) return;
+  if (!station.bookedOrderIds?.has(orderId)) return;
+  station.bookedOrderIds.delete(orderId);
+  const open = state.bookings.find(
+    (b) => b.stationId === station.id && b.orderId === orderId && b.status === 'belegt',
+  );
+  if (open) {
+    open.status = 'frei';
+    open.freedAtMs = state.simElapsedMs;
+  } else {
+    state.bookings.unshift({
+      id: uid('bk'),
+      stationId: station.id,
+      stationName: station.name,
+      orderId,
+      simTimeMs: state.simElapsedMs,
+      status: 'frei',
+      freedAtMs: state.simElapsedMs,
+    });
+    if (state.bookings.length > state.maxBookings) {
+      state.bookings.length = state.maxBookings;
+    }
+  }
+  logEvent(
+    `Buchung <strong>frei</strong>: ${escapeXml(station.name)} · Auftrag #${orderId} · ${formatSimClock(state.simElapsedMs)}`,
+  );
+  renderBookingPanel();
+}
+
+function renderBookingPanel() {
+  const panel = document.getElementById('booking-panel');
+  const countEl = document.getElementById('bookings-count');
+  if (!panel) return;
+
+  const active = state.bookings.filter((b) => b.status === 'belegt');
+  if (countEl) countEl.textContent = `${active.length} aktiv`;
+
+  panel.innerHTML = '';
+  if (!state.bookings.length) {
+    panel.appendChild(
+      el('div', {
+        className: 'bk-empty',
+        text: 'Noch keine Buchungen — Simulation starten. Stationen mit Buchungspflicht erscheinen hier.',
+      }),
+    );
+    return;
+  }
+
+  const activeBox = el('div', { className: 'booking-section' }, [
+    el('div', { className: 'booking-section-title', text: 'Aktiv (belegt)' }),
+  ]);
+  if (!active.length) {
+    activeBox.appendChild(el('div', { className: 'booking-empty-line', text: 'Keine aktiven Belegungen' }));
+  } else {
+    for (const b of active.slice(0, 20)) {
+      activeBox.appendChild(
+        el('div', { className: 'booking-row belegt' }, [
+          el('span', { className: 'booking-status', text: 'belegt' }),
+          el('span', { className: 'booking-station', text: b.stationName }),
+          el('span', { className: 'booking-order', text: `#${b.orderId}` }),
+          el('span', { className: 'booking-time', text: formatSimClock(b.simTimeMs) }),
+        ]),
+      );
+    }
+  }
+  panel.appendChild(activeBox);
+
+  const recent = state.bookings.filter((b) => b.status === 'frei').slice(0, 25);
+  const recentBox = el('div', { className: 'booking-section' }, [
+    el('div', { className: 'booking-section-title', text: 'Zuletzt freigegeben' }),
+  ]);
+  if (!recent.length) {
+    recentBox.appendChild(el('div', { className: 'booking-empty-line', text: 'Noch keine Freigaben' }));
+  } else {
+    for (const b of recent) {
+      recentBox.appendChild(
+        el('div', { className: 'booking-row frei' }, [
+          el('span', { className: 'booking-status', text: 'frei' }),
+          el('span', { className: 'booking-station', text: b.stationName }),
+          el('span', { className: 'booking-order', text: `#${b.orderId}` }),
+          el('span', {
+            className: 'booking-time',
+            text: formatSimClock(b.freedAtMs ?? b.simTimeMs),
+          }),
+        ]),
+      );
+    }
+  }
+  panel.appendChild(recentBox);
+}
+
 function renderStationList() {
   const list = document.getElementById('station-list');
   if (!list) return;
@@ -1628,17 +2039,31 @@ function syncVisuals() {
     else if (level === 'ok') gfx.classList.add('highlight-ok');
     else if (s.processing > 0) gfx.classList.add('highlight-active');
 
-    if (s.queue > 0 && state.overlaysApi) {
-      const badge = document.createElement('div');
-      badge.className = 'token-badge';
-      if (level === 'warn') badge.classList.add('warn');
-      if (level === 'danger') badge.classList.add('danger');
-      badge.textContent = String(s.queue);
-      const oid = state.overlaysApi.add(s.id, {
-        position: { top: -10, right: -10 },
-        html: badge,
-      });
-      state.overlays.set(s.id, oid);
+    if (state.overlaysApi) {
+      if (s.queue > 0) {
+        const badge = document.createElement('div');
+        badge.className = 'token-badge';
+        if (level === 'warn') badge.classList.add('warn');
+        if (level === 'danger') badge.classList.add('danger');
+        badge.textContent = String(s.queue);
+        const oid = state.overlaysApi.add(s.id, {
+          position: { top: -10, right: -10 },
+          html: badge,
+        });
+        state.overlays.set(s.id, oid);
+      }
+      const booked = s.bookedOrderIds ? s.bookedOrderIds.size : 0;
+      if (s.booking && booked > 0) {
+        const bb = document.createElement('div');
+        bb.className = 'booking-badge';
+        bb.title = `${booked} Buchung(en) belegt`;
+        bb.textContent = `B ${booked}`;
+        const bid = state.overlaysApi.add(s.id, {
+          position: { bottom: -12, left: -8 },
+          html: bb,
+        });
+        state.overlays.set(`${s.id}__bk`, bid);
+      }
     }
   }
 
@@ -1679,37 +2104,19 @@ function tryPromoteWaiting() {
         service *= 2.5;
       }
       o.remainingMs = service;
+      recordStationBooking(station, o.id);
     }
   }
 }
 
-function spawnOrder() {
-  if (!state.stations.length) return;
-  const id = state.nextOrderId++;
-  const first = state.stations[0];
-  const processing = [...state.orders.values()].filter(
-    (o) => o.stationIndex === 0 && !o.waiting,
-  ).length;
-  const waiting = processing >= first.capacity;
-  let remaining = waiting ? 0 : randBetween(first.serviceMs);
-  if (!waiting && Math.random() < state.crisisChance) remaining *= 2.5;
-
-  state.orders.set(id, {
-    id,
-    stationIndex: 0,
-    remainingMs: remaining,
-    waiting,
-    startedAt: state.simElapsedMs,
-  });
-  state.activeOrders += 1;
-  if (id === 1 || id % 5 === 0) {
-    logEvent(`Auftrag <strong>#${id}</strong> gestartet → ${first.name}`);
-  }
+function shouldSkipStation(station) {
+  const pct = Math.max(0, Math.min(100, Number(station?.skipPct) || 0));
+  if (pct <= 0) return false;
+  return Math.random() * 100 < pct;
 }
 
-function advanceOrder(order) {
-  const next = order.stationIndex + 1;
-  if (next >= state.stations.length) {
+function enterStation(order, index) {
+  if (index >= state.stations.length) {
     const lead = state.simElapsedMs - order.startedAt;
     state.leadTimeSumMs += lead;
     state.leadTimeCount += 1;
@@ -1722,19 +2129,60 @@ function advanceOrder(order) {
     }
     return;
   }
-  const station = state.stations[next];
+
+  const station = state.stations[index];
+  if (shouldSkipStation(station)) {
+    logEvent(
+      `Auftrag <strong>#${order.id}</strong> überspringt <em>${escapeXml(station.name)}</em> ` +
+        `(Skip ${station.skipPct} %)`,
+    );
+    enterStation(order, index + 1);
+    return;
+  }
+
   const processing = [...state.orders.values()].filter(
-    (o) => o.stationIndex === next && !o.waiting,
+    (o) => o.stationIndex === index && !o.waiting && o.id !== order.id,
   ).length;
   const mustWait = processing >= station.capacity;
-  order.stationIndex = next;
+  order.stationIndex = index;
   order.waiting = mustWait;
   order.remainingMs = mustWait ? 0 : randBetween(station.serviceMs);
+  if (!mustWait) {
+    if (index === 0 && Math.random() < state.crisisChance) {
+      order.remainingMs *= 2.5;
+    }
+    recordStationBooking(station, order.id);
+  }
   if (mustWait && station.capacity <= 2) {
     logEvent(
-      `Engpass an <strong>${station.name}</strong>: Auftrag #${order.id} wartet (Queue &gt; Kapazität ${station.capacity})`,
+      `Engpass an <strong>${escapeXml(station.name)}</strong>: Auftrag #${order.id} wartet (Queue &gt; Kapazität ${station.capacity})`,
     );
   }
+}
+
+function spawnOrder() {
+  if (!state.stations.length) return;
+  const id = state.nextOrderId++;
+  const order = {
+    id,
+    stationIndex: 0,
+    remainingMs: 0,
+    waiting: true,
+    startedAt: state.simElapsedMs,
+  };
+  state.orders.set(id, order);
+  state.activeOrders += 1;
+  enterStation(order, 0);
+  if (id === 1 || id % 5 === 0) {
+    const st = state.stations[order.stationIndex];
+    logEvent(`Auftrag <strong>#${id}</strong> gestartet → ${st ? st.name : '—'}`);
+  }
+}
+
+function advanceOrder(order) {
+  const current = state.stations[order.stationIndex];
+  if (current) releaseStationBooking(current, order.id);
+  enterStation(order, order.stationIndex + 1);
 }
 
 function tick(dtMs) {
