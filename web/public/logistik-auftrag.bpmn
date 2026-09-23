@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_LogistikAuftrag"
+                  targetNamespace="http://novaforge.de/logistik"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.28.0">
+  <bpmn:process id="LogistikAuftrag" name="Logistik-Auftrag (Ende-zu-Ende)" isExecutable="true"
+                camunda:versionTag="1.0.0" camunda:historyTimeToLive="30">
+
+    <!-- Start -->
+    <bpmn:startEvent id="Start_Bestellung" name="Bestellung eingegangen">
+      <bpmn:outgoing>Flow_to_Material</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- 1 Material-/Lager-Buchung -->
+    <bpmn:userTask id="Task_MaterialBuchung" name="Material-/Lager-Buchung"
+                   camunda:assignee="demo" camunda:candidateGroups="lager">
+      <bpmn:incoming>Flow_to_Material</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_FehlteileGw</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- XOR: Fehlteile? -->
+    <bpmn:exclusiveGateway id="Gw_Fehlteile" name="Fehlteile?" default="Flow_kein_Fehlteil">
+      <bpmn:incoming>Flow_to_FehlteileGw</bpmn:incoming>
+      <bpmn:outgoing>Flow_kein_Fehlteil</bpmn:outgoing>
+      <bpmn:outgoing>Flow_hat_Fehlteil</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_Nachbestellung" name="Nachbestellung-Buchung"
+                   camunda:assignee="demo" camunda:candidateGroups="einkauf">
+      <bpmn:incoming>Flow_hat_Fehlteil</bpmn:incoming>
+      <bpmn:outgoing>Flow_nach_Nachbestellung</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 2 Vormontage -->
+    <bpmn:userTask id="Task_Vormontage" name="Vormontage"
+                   camunda:assignee="demo" camunda:candidateGroups="vormontage">
+      <bpmn:incoming>Flow_kein_Fehlteil</bpmn:incoming>
+      <bpmn:incoming>Flow_nach_Nachbestellung</bpmn:incoming>
+      <bpmn:incoming>Flow_nach_Warten</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_EngpassGw</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- XOR: Engpass Vormontage? -->
+    <bpmn:exclusiveGateway id="Gw_EngpassVormontage" name="Engpass Vormontage?" default="Flow_kein_Engpass">
+      <bpmn:incoming>Flow_to_EngpassGw</bpmn:incoming>
+      <bpmn:outgoing>Flow_kein_Engpass</bpmn:outgoing>
+      <bpmn:outgoing>Flow_warten</bpmn:outgoing>
+      <bpmn:outgoing>Flow_umleiten</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_WartenKapazitaet" name="Warten auf Kapazität (Vormontage)"
+                   camunda:assignee="demo" camunda:candidateGroups="dispo">
+      <bpmn:incoming>Flow_warten</bpmn:incoming>
+      <bpmn:outgoing>Flow_nach_Warten</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_Umleitung" name="Umleitung alternative Station"
+                   camunda:assignee="demo" camunda:candidateGroups="dispo">
+      <bpmn:incoming>Flow_umleiten</bpmn:incoming>
+      <bpmn:outgoing>Flow_nach_Umleitung</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 3 Produktion / Montage -->
+    <bpmn:userTask id="Task_Produktion" name="Produktion / Montage"
+                   camunda:assignee="demo" camunda:candidateGroups="produktion">
+      <bpmn:incoming>Flow_kein_Engpass</bpmn:incoming>
+      <bpmn:incoming>Flow_nach_Umleitung</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_QS</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 4 QS / Freigabe -->
+    <bpmn:userTask id="Task_QS" name="QS / Freigabe"
+                   camunda:assignee="demo" camunda:candidateGroups="qs">
+      <bpmn:incoming>Flow_to_QS</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_QSGw</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gw_QS" name="QS bestanden?" default="Flow_qs_ok">
+      <bpmn:incoming>Flow_to_QSGw</bpmn:incoming>
+      <bpmn:outgoing>Flow_qs_ok</bpmn:outgoing>
+      <bpmn:outgoing>Flow_qs_nacharbeit</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_Nacharbeit" name="Nacharbeit Produktion"
+                   camunda:assignee="demo" camunda:candidateGroups="produktion">
+      <bpmn:incoming>Flow_qs_nacharbeit</bpmn:incoming>
+      <bpmn:outgoing>Flow_nach_Nacharbeit</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- 5 Versand-Buchung -->
+    <bpmn:userTask id="Task_VersandBuchung" name="Versand-Buchung"
+                   camunda:assignee="demo" camunda:candidateGroups="versand">
+      <bpmn:incoming>Flow_qs_ok</bpmn:incoming>
+      <bpmn:incoming>Flow_nach_Nacharbeit</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_End</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- End -->
+    <bpmn:endEvent id="End_Abgeschlossen" name="Abgeschlossen">
+      <bpmn:incoming>Flow_to_End</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Sequence flows -->
+    <bpmn:sequenceFlow id="Flow_to_Material" sourceRef="Start_Bestellung" targetRef="Task_MaterialBuchung" />
+    <bpmn:sequenceFlow id="Flow_to_FehlteileGw" sourceRef="Task_MaterialBuchung" targetRef="Gw_Fehlteile" />
+    <bpmn:sequenceFlow id="Flow_kein_Fehlteil" name="keine Fehlteile" sourceRef="Gw_Fehlteile" targetRef="Task_Vormontage" />
+    <bpmn:sequenceFlow id="Flow_hat_Fehlteil" name="Fehlteile vorhanden" sourceRef="Gw_Fehlteile" targetRef="Task_Nachbestellung">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${fehlteile == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_nach_Nachbestellung" sourceRef="Task_Nachbestellung" targetRef="Task_Vormontage" />
+    <bpmn:sequenceFlow id="Flow_to_EngpassGw" sourceRef="Task_Vormontage" targetRef="Gw_EngpassVormontage" />
+    <bpmn:sequenceFlow id="Flow_kein_Engpass" name="Kapazität OK" sourceRef="Gw_EngpassVormontage" targetRef="Task_Produktion" />
+    <bpmn:sequenceFlow id="Flow_warten" name="warten" sourceRef="Gw_EngpassVormontage" targetRef="Task_WartenKapazitaet">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${engpassEntscheidung == 'warten'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_umleiten" name="umleiten" sourceRef="Gw_EngpassVormontage" targetRef="Task_Umleitung">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${engpassEntscheidung == 'umleiten'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_nach_Warten" sourceRef="Task_WartenKapazitaet" targetRef="Task_Vormontage" />
+    <bpmn:sequenceFlow id="Flow_nach_Umleitung" sourceRef="Task_Umleitung" targetRef="Task_Produktion" />
+    <bpmn:sequenceFlow id="Flow_to_QS" sourceRef="Task_Produktion" targetRef="Task_QS" />
+    <bpmn:sequenceFlow id="Flow_to_QSGw" sourceRef="Task_QS" targetRef="Gw_QS" />
+    <bpmn:sequenceFlow id="Flow_qs_ok" name="freigegeben" sourceRef="Gw_QS" targetRef="Task_VersandBuchung" />
+    <bpmn:sequenceFlow id="Flow_qs_nacharbeit" name="Nacharbeit nötig" sourceRef="Gw_QS" targetRef="Task_Nacharbeit">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${qsBestanden == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_nach_Nacharbeit" sourceRef="Task_Nacharbeit" targetRef="Task_VersandBuchung" />
+    <bpmn:sequenceFlow id="Flow_to_End" sourceRef="Task_VersandBuchung" targetRef="End_Abgeschlossen" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Logistik">
+    <bpmndi:BPMNPlane id="BPMNPlane_Logistik" bpmnElement="LogistikAuftrag">
+      <bpmndi:BPMNShape id="Shape_Start" bpmnElement="Start_Bestellung">
+        <dc:Bounds x="152" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="128" y="275" width="85" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Material" bpmnElement="Task_MaterialBuchung">
+        <dc:Bounds x="240" y="210" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GwFehlteile" bpmnElement="Gw_Fehlteile" isMarkerVisible="true">
+        <dc:Bounds x="425" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="420" y="195" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Nachbestellung" bpmnElement="Task_Nachbestellung">
+        <dc:Bounds x="400" y="80" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Vormontage" bpmnElement="Task_Vormontage">
+        <dc:Bounds x="530" y="210" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GwEngpass" bpmnElement="Gw_EngpassVormontage" isMarkerVisible="true">
+        <dc:Bounds x="715" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="692" y="195" width="96" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Warten" bpmnElement="Task_WartenKapazitaet">
+        <dc:Bounds x="670" y="340" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Umleitung" bpmnElement="Task_Umleitung">
+        <dc:Bounds x="800" y="80" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Produktion" bpmnElement="Task_Produktion">
+        <dc:Bounds x="900" y="210" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_QS" bpmnElement="Task_QS">
+        <dc:Bounds x="1090" y="210" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GwQS" bpmnElement="Gw_QS" isMarkerVisible="true">
+        <dc:Bounds x="1275" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1260" y="195" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Nacharbeit" bpmnElement="Task_Nacharbeit">
+        <dc:Bounds x="1230" y="340" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Versand" bpmnElement="Task_VersandBuchung">
+        <dc:Bounds x="1380" y="210" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End" bpmnElement="End_Abgeschlossen">
+        <dc:Bounds x="1582" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1565" y="275" width="71" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_to_Material" bpmnElement="Flow_to_Material">
+        <di:waypoint x="188" y="250" />
+        <di:waypoint x="240" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_to_Fehlteile" bpmnElement="Flow_to_FehlteileGw">
+        <di:waypoint x="380" y="250" />
+        <di:waypoint x="425" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_kein_Fehlteil" bpmnElement="Flow_kein_Fehlteil">
+        <di:waypoint x="475" y="250" />
+        <di:waypoint x="530" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="475" y="232" width="78" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_hat_Fehlteil" bpmnElement="Flow_hat_Fehlteil">
+        <di:waypoint x="450" y="225" />
+        <di:waypoint x="450" y="160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="458" y="180" width="105" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_nach_Nachbestellung" bpmnElement="Flow_nach_Nachbestellung">
+        <di:waypoint x="540" y="120" />
+        <di:waypoint x="600" y="120" />
+        <di:waypoint x="600" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_to_Engpass" bpmnElement="Flow_to_EngpassGw">
+        <di:waypoint x="670" y="250" />
+        <di:waypoint x="715" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_kein_Engpass" bpmnElement="Flow_kein_Engpass">
+        <di:waypoint x="765" y="250" />
+        <di:waypoint x="900" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="800" y="232" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_warten" bpmnElement="Flow_warten">
+        <di:waypoint x="740" y="275" />
+        <di:waypoint x="740" y="340" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="748" y="300" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_umleiten" bpmnElement="Flow_umleiten">
+        <di:waypoint x="740" y="225" />
+        <di:waypoint x="740" y="120" />
+        <di:waypoint x="800" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="748" y="150" width="45" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_nach_Warten" bpmnElement="Flow_nach_Warten">
+        <di:waypoint x="670" y="380" />
+        <di:waypoint x="600" y="380" />
+        <di:waypoint x="600" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_nach_Umleitung" bpmnElement="Flow_nach_Umleitung">
+        <di:waypoint x="940" y="120" />
+        <di:waypoint x="970" y="120" />
+        <di:waypoint x="970" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_to_QS" bpmnElement="Flow_to_QS">
+        <di:waypoint x="1040" y="250" />
+        <di:waypoint x="1090" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_to_QSGw" bpmnElement="Flow_to_QSGw">
+        <di:waypoint x="1230" y="250" />
+        <di:waypoint x="1275" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_qs_ok" bpmnElement="Flow_qs_ok">
+        <di:waypoint x="1325" y="250" />
+        <di:waypoint x="1380" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1325" y="232" width="62" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_qs_nacharbeit" bpmnElement="Flow_qs_nacharbeit">
+        <di:waypoint x="1300" y="275" />
+        <di:waypoint x="1300" y="340" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1310" y="300" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_nach_Nacharbeit" bpmnElement="Flow_nach_Nacharbeit">
+        <di:waypoint x="1370" y="380" />
+        <di:waypoint x="1450" y="380" />
+        <di:waypoint x="1450" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_to_End" bpmnElement="Flow_to_End">
+        <di:waypoint x="1520" y="250" />
+        <di:waypoint x="1582" y="250" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

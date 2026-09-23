@@ -1,5 +1,9 @@
 # Logistik-Camunda – Community-Spike (Demo)
 
+> **Live Demo (Browser):** [https://beko2210.github.io/logistik-camunda/](https://beko2210.github.io/logistik-camunda/)  
+> Interaktive BPMN-Prozesskarte mit Buchungspunkten und Engpass-Simulation — ohne Docker.
+
+
 Kunden-Demo: Ende-zu-Ende-Logistik-/Fertigungsprozess mit **Buchungspunkten** an jeder Station und sichtbaren **Engpässen** (offene Tasks / Warteschlangen) in Camunda Cockpit.
 
 - **Stack:** Camunda Platform **7** Community (Platform Run) – Cockpit, Tasklist, Admin, Welcome, REST  
@@ -143,14 +147,39 @@ logistik-camunda/
 │   ├── start.sh
 │   ├── deploy-process.sh
 │   └── demo-instances.sh
+├── web/                      # Browser-Demo (Vite + bpmn-js)
+│   ├── public/
+│   └── src/
+├── .github/workflows/pages.yml
 ├── README.md
 └── DEMO-RUNBOOK.md
 ```
 
 ---
 
+
+## Browser-Demo (GitHub Pages)
+
+Statische Website unter `web/` (Vite + bpmn-js Viewer):
+
+1. Öffnen: **https://beko2210.github.io/logistik-camunda/**
+2. **Demo starten** → Token fließen durch den Prozess
+3. Rechte Seite: Auslastung / Warteschlange je Station
+4. Überlastete Stationen (z. B. Vormontage) werden **amber/rot** hervorgehoben
+
+Lokal entwickeln:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Build: `npm run build` (Ausgabe `web/dist`, Base-Path `/logistik-camunda/`). Deployment erfolgt automatisch per GitHub Actions auf GitHub Pages.
+
+---
 ## Hinweise
 
 - Community Edition, H2-Datenbank im Container-Volume (Demo-only).  
-- Kein Push zu GitHub nötig – lokales Git-Repo ist initialisiert.  
+- Repo: https://github.com/BEKO2210/logistik-camunda — Live-Demo via GitHub Pages.  
 - Image: `camunda/camunda-bpm-platform:run-7.22.0` (offen, ohne Cloud-Account).  

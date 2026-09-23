@@ -14,3 +14,8 @@ camunda-db/
 .env
 .env.*
 !.env.example
+
+# Web / Node
+web/node_modules/
+web/dist/
+*.local
