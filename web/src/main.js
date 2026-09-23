@@ -17,7 +17,7 @@ const STATIONS = [
   { id: 'Task_VersandBuchung', name: 'Versand-Buchung', capacity: 4, serviceMs: [350, 800] },
 ];
 
-const BPMN_URL = new URL('../public/logistik-auftrag.bpmn', import.meta.url).href;
+const BPMN_URL = `${import.meta.env.BASE_URL}logistik-auftrag.bpmn`;
 
 const state = {
   running: false,
@@ -67,16 +67,7 @@ function buildShell(root) {
 
   const topbar = el('header', { className: 'topbar' }, [
     el('div', { className: 'topbar-logo' }, [
-      el('svg', { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' }, [
-        (() => {
-          const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          p.setAttribute('d', 'M3 7h13l5 5v5h-2.5a2.5 2.5 0 01-5 0H10a2.5 2.5 0 01-5 0H3V7z');
-          p.setAttribute('stroke', 'currentColor');
-          p.setAttribute('stroke-width', '1.6');
-          p.setAttribute('fill', 'rgba(255,255,255,0.15)');
-          return p;
-        })(),
-      ]),
+      el('span', { 'aria-hidden': 'true', text: '▣' }),
       el('span', { text: 'Logistik Camunda' }),
     ]),
     el('span', { className: 'topbar-badge', text: 'Browser-Demo' }),
@@ -556,18 +547,9 @@ async function loadDiagram() {
   state.elementRegistry = viewer.get('elementRegistry');
   state.overlaysApi = viewer.get('overlays');
 
-  let xml;
-  try {
-    const res = await fetch(BPMN_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    xml = await res.text();
-  } catch (err) {
-    // Fallback: relative public path (Vite serves /public at root; with base prefix)
-    const fallback = `${import.meta.env.BASE_URL}logistik-auftrag.bpmn`.replace(/\/{2,}/g, '/');
-    const res2 = await fetch(fallback.startsWith('http') ? fallback : fallback);
-    if (!res2.ok) throw err;
-    xml = await res2.text();
-  }
+  const res = await fetch(BPMN_URL);
+  if (!res.ok) throw new Error(`BPMN-Datei nicht gefunden (HTTP ${res.status})`);
+  const xml = await res.text();
 
   await viewer.importXML(xml);
   state.canvas.zoom('fit-viewport', 'auto');
